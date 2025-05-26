@@ -1,4 +1,4 @@
-# BingeBeaocon
+# BingeBeacon
 
 ### Plan
 
