@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -16,19 +17,28 @@ func NewRouter() *mux.Router {
 	return r
 }
 
-func AlertsHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: Integrate with DB to manage alerts
-	w.Write([]byte("Alerts endpoint - DB integration pending"))
-}
-
-func TimelineHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: Integrate with DB to fetch timeline
-	w.Write([]byte("Timeline endpoint - DB integration pending"))
-}
-
 func ShowsHandler(w http.ResponseWriter, r *http.Request) {
 	// TODO: Integrate with OMDB/TMDB APIs and DB for show info
-	w.Write([]byte("Shows endpoint - OMDB/TMDB integration pending"))
+	q := r.URL.Query().Get("q")
+	source := r.URL.Query().Get("source")
+	if q == "" {
+		http.Error(w, "Missing query parameter 'q'", http.StatusBadRequest)
+		return
+	}
+	var result *ShowResult
+	var err error
+	switch source {
+	case "tmdb":
+		result, err = fetchFromTMDB(q)
+	default:
+		result, err = fetchFromOMDB(q)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 func NotificationsHandler(w http.ResponseWriter, r *http.Request) {
