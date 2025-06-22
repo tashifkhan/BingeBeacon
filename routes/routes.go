@@ -41,11 +41,6 @@ func ShowsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-func NotificationsHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: Integrate with push notification service and DB
-	w.Write([]byte("Notifications endpoint - Push/DB integration pending"))
-}
-
 func UsersHandler(w http.ResponseWriter, r *http.Request) {
 	// TODO: Integrate with DB for user management
 	w.Write([]byte("Users endpoint - DB integration pending"))
