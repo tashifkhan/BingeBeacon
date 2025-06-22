@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 
-	"./routes"
+	"bingebeaocon/routes"
 )
 
 func main() {
