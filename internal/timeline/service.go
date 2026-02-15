@@ -2,18 +2,25 @@ package timeline
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"github.com/tashifkhan/bingebeacon/internal/pkg/cache"
 	"gorm.io/datatypes"
 )
 
 type Service struct {
-	repo *Repository
+	repo  *Repository
+	redis *redis.Client
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, rdb *redis.Client) *Service {
+	return &Service{
+		repo:  repo,
+		redis: rdb,
+	}
 }
 
 type TimelineEventResponse struct {
@@ -30,35 +37,47 @@ type TimelineEventResponse struct {
 }
 
 func (s *Service) GetTimeline(ctx context.Context, userID uuid.UUID, from, to time.Time, eventType string) ([]TimelineEventResponse, error) {
-	events, err := s.repo.GetUserTimeline(userID, from, to, eventType)
-	if err != nil {
-		return nil, err
-	}
-	return s.mapEvents(events), nil
+	key := fmt.Sprintf("timeline:%s:range:%s:%s:%s", userID, from.Format("2006-01-02"), to.Format("2006-01-02"), eventType)
+	return cache.GetOrSet(ctx, s.redis, key, 2*time.Minute, func() ([]TimelineEventResponse, error) {
+		events, err := s.repo.GetUserTimeline(userID, from, to, eventType)
+		if err != nil {
+			return nil, err
+		}
+		return s.mapEvents(events), nil
+	})
 }
 
 func (s *Service) GetToday(ctx context.Context, userID uuid.UUID) ([]TimelineEventResponse, error) {
-	events, err := s.repo.GetTodayEvents(userID, "UTC")
-	if err != nil {
-		return nil, err
-	}
-	return s.mapEvents(events), nil
+	key := fmt.Sprintf("timeline:%s:today", userID)
+	return cache.GetOrSet(ctx, s.redis, key, 2*time.Minute, func() ([]TimelineEventResponse, error) {
+		events, err := s.repo.GetTodayEvents(userID, "UTC")
+		if err != nil {
+			return nil, err
+		}
+		return s.mapEvents(events), nil
+	})
 }
 
 func (s *Service) GetThisWeek(ctx context.Context, userID uuid.UUID) ([]TimelineEventResponse, error) {
-	events, err := s.repo.GetWeekEvents(userID, "UTC")
-	if err != nil {
-		return nil, err
-	}
-	return s.mapEvents(events), nil
+	key := fmt.Sprintf("timeline:%s:week", userID)
+	return cache.GetOrSet(ctx, s.redis, key, 2*time.Minute, func() ([]TimelineEventResponse, error) {
+		events, err := s.repo.GetWeekEvents(userID, "UTC")
+		if err != nil {
+			return nil, err
+		}
+		return s.mapEvents(events), nil
+	})
 }
 
 func (s *Service) GetUpcoming(ctx context.Context, userID uuid.UUID) ([]TimelineEventResponse, error) {
-	events, err := s.repo.GetUpcomingEvents(userID, 30)
-	if err != nil {
-		return nil, err
-	}
-	return s.mapEvents(events), nil
+	key := fmt.Sprintf("timeline:%s:upcoming", userID)
+	return cache.GetOrSet(ctx, s.redis, key, 2*time.Minute, func() ([]TimelineEventResponse, error) {
+		events, err := s.repo.GetUpcomingEvents(userID, 30)
+		if err != nil {
+			return nil, err
+		}
+		return s.mapEvents(events), nil
+	})
 }
 
 func (s *Service) mapEvents(events []TimelineEvent) []TimelineEventResponse {

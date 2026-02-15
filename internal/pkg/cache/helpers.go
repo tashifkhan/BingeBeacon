@@ -38,3 +38,13 @@ func GetOrSet[T any](ctx context.Context, rdb *redis.Client, key string, ttl tim
 
 	return result, nil
 }
+
+func Invalidate(ctx context.Context, rdb *redis.Client, pattern string) error {
+	iter := rdb.Scan(ctx, 0, pattern, 0).Iterator()
+	for iter.Next(ctx) {
+		if err := rdb.Del(ctx, iter.Val()).Err(); err != nil {
+			return err
+		}
+	}
+	return iter.Err()
+}

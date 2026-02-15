@@ -18,6 +18,7 @@ import (
 	"github.com/tashifkhan/bingebeacon/internal/config"
 	"github.com/tashifkhan/bingebeacon/internal/metadata"
 	"github.com/tashifkhan/bingebeacon/internal/metadata/omdb"
+	"github.com/tashifkhan/bingebeacon/internal/metadata/thetvdb"
 	"github.com/tashifkhan/bingebeacon/internal/metadata/tmdb"
 	"github.com/tashifkhan/bingebeacon/internal/notification"
 	"github.com/tashifkhan/bingebeacon/internal/pkg/cache"
@@ -76,6 +77,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	// External Clients
 	tmdbClient := tmdb.NewClient(cfg.TMDB, log)
 	omdbClient := omdb.NewClient(cfg.OMDB)
+	thetvdbClient := thetvdb.NewClient(cfg.TheTVDB, log)
 
 	// FCM (Optional - warn if failed)
 	fcmClient, err := notification.NewFCMClient(cfg.FCM.CredentialsFile, log)
@@ -88,13 +90,13 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	userSvc := user.NewService(userRepo)
 	authSvc := auth.NewService(authRepo, userRepo, cfg.JWT)
 	showSvc := show.NewService(showRepo, tmdbClient, rdb)
-	notifSvc := notification.NewService(notifRepo)
+	notifSvc := notification.NewService(notifRepo, rdb)
 
 	// Syncer
-	syncer := metadata.NewSyncer(tmdbClient, omdbClient, showRepo, alertRepo, timelineRepo, log)
+	syncer := metadata.NewSyncer(tmdbClient, omdbClient, thetvdbClient, showRepo, alertRepo, timelineRepo, rdb, log)
 
-	alertSvc := alert.NewService(alertRepo, showSvc, showRepo, syncer)
-	timelineSvc := timeline.NewService(timelineRepo)
+	alertSvc := alert.NewService(alertRepo, showSvc, showRepo, syncer, rdb)
+	timelineSvc := timeline.NewService(timelineRepo, rdb)
 
 	// Handlers
 	userHandler := user.NewHandler(userSvc)
@@ -138,6 +140,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	showRouter.HandleFunc("/{id}", showHandler.GetShow).Methods("GET")
 	showRouter.HandleFunc("/{id}/seasons/{num}", showHandler.GetSeason).Methods("GET")
 	showRouter.HandleFunc("/{id}/episodes", showHandler.GetEpisodes).Methods("GET")
+	showRouter.HandleFunc("/{id}/sync-status", showHandler.GetSyncStatus).Methods("GET")
 
 	// Tracking Routes (Protected)
 	trackingRouter := api.PathPrefix("/tracking").Subrouter()

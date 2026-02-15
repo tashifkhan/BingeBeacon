@@ -15,6 +15,7 @@ type Config struct {
 	JWT      JWTConfig
 	TMDB     TMDBConfig
 	OMDB     OMDBConfig
+	TheTVDB  TheTVDBConfig
 	FCM      FCMConfig
 }
 
@@ -54,6 +55,12 @@ type OMDBConfig struct {
 	BaseURL string `mapstructure:"base_url"`
 }
 
+type TheTVDBConfig struct {
+	APIKey  string `mapstructure:"api_key"`
+	PIN     string `mapstructure:"pin"`
+	BaseURL string `mapstructure:"base_url"`
+}
+
 type FCMConfig struct {
 	CredentialsFile string `mapstructure:"credentials_file"`
 }
@@ -74,6 +81,7 @@ func Load() *Config {
 	viper.SetDefault("jwt.refresh_token_ttl", 168*time.Hour)
 	viper.SetDefault("tmdb.base_url", "https://api.themoviedb.org/3")
 	viper.SetDefault("omdb.base_url", "https://www.omdbapi.com")
+	viper.SetDefault("thetvdb.base_url", "https://api4.thetvdb.com/v4")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {

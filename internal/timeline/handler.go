@@ -56,7 +56,7 @@ func (h *Handler) GetTimeline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, events)
+	httputil.JSONWithCache(w, r, http.StatusOK, events, 60, 120)
 }
 
 func (h *Handler) GetToday(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +72,7 @@ func (h *Handler) GetToday(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, events)
+	httputil.JSONWithCache(w, r, http.StatusOK, events, 60, 120)
 }
 
 func (h *Handler) GetThisWeek(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +88,7 @@ func (h *Handler) GetThisWeek(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, events)
+	httputil.JSONWithCache(w, r, http.StatusOK, events, 60, 120)
 }
 
 func (h *Handler) GetUpcoming(w http.ResponseWriter, r *http.Request) {
@@ -104,5 +104,5 @@ func (h *Handler) GetUpcoming(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, events)
+	httputil.JSONWithCache(w, r, http.StatusOK, events, 60, 120)
 }

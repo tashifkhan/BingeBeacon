@@ -32,7 +32,7 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, results)
+	httputil.JSONWithCache(w, r, http.StatusOK, results, 60, 300)
 }
 
 func (h *Handler) GetShow(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +50,7 @@ func (h *Handler) GetShow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, show)
+	httputil.JSONWithCache(w, r, http.StatusOK, show, 300, 3600)
 }
 
 func (h *Handler) GetSeason(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +76,7 @@ func (h *Handler) GetSeason(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, season)
+	httputil.JSONWithCache(w, r, http.StatusOK, season, 300, 3600)
 }
 
 func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
@@ -96,5 +96,30 @@ func (h *Handler) GetEpisodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, episodes)
+	httputil.JSONWithCache(w, r, http.StatusOK, episodes, 300, 3600)
+}
+
+func (h *Handler) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	idStr := vars["id"]
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Invalid show ID")
+		return
+	}
+
+	show, err := h.svc.GetShow(r.Context(), id)
+	if err != nil {
+		httputil.Error(w, http.StatusNotFound, "Show not found")
+		return
+	}
+
+	status := map[string]interface{}{
+		"id":             show.ID,
+		"last_synced_at": show.LastSyncedAt,
+		"sync_priority":  show.SyncPriority,
+		"status":         show.Status,
+	}
+
+	httputil.JSON(w, http.StatusOK, status)
 }

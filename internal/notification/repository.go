@@ -58,6 +58,7 @@ func (r *Repository) MarkRead(id uuid.UUID, userID uuid.UUID) error {
 
 func (r *Repository) MarkAllRead(userID uuid.UUID) error {
 	now := time.Now()
+	// Update all unread notifications to 'read'
 	return r.db.Model(&Notification{}).
 		Where("user_id = ? AND status != ?", userID, "read").
 		Updates(map[string]interface{}{
@@ -66,7 +67,7 @@ func (r *Repository) MarkAllRead(userID uuid.UUID) error {
 		}).Error
 }
 
-func (r *Repository) GetByUser(userID uuid.UUID, status string, page, perPage int) ([]Notification, int64, error) {
+func (r *Repository) GetByUser(userID uuid.UUID, status string, notifType string, from, to *time.Time, page, perPage int) ([]Notification, int64, error) {
 	var notifs []Notification
 	var total int64
 
@@ -74,6 +75,18 @@ func (r *Repository) GetByUser(userID uuid.UUID, status string, page, perPage in
 
 	if status != "" {
 		db = db.Where("status = ?", status)
+	}
+
+	if notifType != "" {
+		db = db.Where("type = ?", notifType)
+	}
+
+	if from != nil {
+		db = db.Where("created_at >= ?", from)
+	}
+
+	if to != nil {
+		db = db.Where("created_at <= ?", to)
 	}
 
 	if err := db.Count(&total).Error; err != nil {

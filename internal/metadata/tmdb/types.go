@@ -20,6 +20,18 @@ type SearchResult struct {
 	ReleaseDate  string  `json:"release_date"`   // for Movie
 }
 
+type ExternalIDsResponse struct {
+	IMDBID      *string `json:"imdb_id"`
+	TVDBID      *int    `json:"tvdb_id"`
+	FreebaseMID *string `json:"freebase_mid"`
+	FreebaseID  *string `json:"freebase_id"`
+	TVRageID    *int    `json:"tvrage_id"`
+	FacebookID  *string `json:"facebook_id"`
+	InstagramID *string `json:"instagram_id"`
+	TwitterID   *string `json:"twitter_id"`
+	ID          int     `json:"id"`
+}
+
 type TVShowDetail struct {
 	ID           int       `json:"id"`
 	Name         string    `json:"name"`

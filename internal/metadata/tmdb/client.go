@@ -93,6 +93,12 @@ func (c *Client) GetTVSeason(ctx context.Context, tmdbID int, seasonNum int) (*S
 	return &resp, err
 }
 
+func (c *Client) GetExternalIDs(ctx context.Context, tmdbID int) (*ExternalIDsResponse, error) {
+	var resp ExternalIDsResponse
+	err := c.do(ctx, "GET", fmt.Sprintf("/tv/%d/external_ids", tmdbID), nil, &resp)
+	return &resp, err
+}
+
 func (c *Client) GetTrending(ctx context.Context, mediaType string, timeWindow string) (*TrendingResponse, error) {
 	var resp TrendingResponse
 	err := c.do(ctx, "GET", fmt.Sprintf("/trending/%s/%s", mediaType, timeWindow), nil, &resp)

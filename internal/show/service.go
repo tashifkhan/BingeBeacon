@@ -118,11 +118,17 @@ func (s *Service) GetShow(ctx context.Context, id uuid.UUID) (*Show, error) {
 // ... other methods unchanged ...
 
 func (s *Service) GetSeason(ctx context.Context, showID uuid.UUID, seasonNum int) (*Season, error) {
-	return s.repo.GetSeasonWithEpisodes(showID, seasonNum)
+	key := fmt.Sprintf("season:%s:%d", showID, seasonNum)
+	return cache.GetOrSet(ctx, s.redis, key, 15*time.Minute, func() (*Season, error) {
+		return s.repo.GetSeasonWithEpisodes(showID, seasonNum)
+	})
 }
 
 func (s *Service) GetEpisodes(ctx context.Context, showID uuid.UUID, upcoming bool) ([]Episode, error) {
-	return s.repo.GetEpisodes(showID, upcoming)
+	key := fmt.Sprintf("episodes:%s:%v", showID, upcoming)
+	return cache.GetOrSet(ctx, s.redis, key, 15*time.Minute, func() ([]Episode, error) {
+		return s.repo.GetEpisodes(showID, upcoming)
+	})
 }
 
 func (s *Service) GetOrCreateByTMDBID(ctx context.Context, tmdbID int) (*Show, error) {

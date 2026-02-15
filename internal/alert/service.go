@@ -3,9 +3,12 @@ package alert
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+	"github.com/tashifkhan/bingebeacon/internal/pkg/cache"
 	"github.com/tashifkhan/bingebeacon/internal/show"
 )
 
@@ -18,14 +21,16 @@ type Service struct {
 	showSvc  *show.Service
 	showRepo *show.Repository
 	syncer   ShowSyncer
+	redis    *redis.Client
 }
 
-func NewService(repo *Repository, showSvc *show.Service, showRepo *show.Repository, syncer ShowSyncer) *Service {
+func NewService(repo *Repository, showSvc *show.Service, showRepo *show.Repository, syncer ShowSyncer, rdb *redis.Client) *Service {
 	return &Service{
 		repo:     repo,
 		showSvc:  showSvc,
 		showRepo: showRepo,
 		syncer:   syncer,
+		redis:    rdb,
 	}
 }
 
@@ -108,11 +113,18 @@ func (s *Service) TrackShow(ctx context.Context, userID uuid.UUID, req TrackRequ
 		s.syncer.SyncShow(bgCtx, showID)
 	}()
 
+	// Invalidate timeline cache for this user
+	cache.Invalidate(ctx, s.redis, fmt.Sprintf("timeline:%s:*", userID))
+
 	return nil
 }
 
 func (s *Service) UntrackShow(ctx context.Context, userID, showID uuid.UUID) error {
-	return s.repo.Delete(userID, showID)
+	if err := s.repo.Delete(userID, showID); err != nil {
+		return err
+	}
+	// Invalidate timeline cache
+	return cache.Invalidate(ctx, s.redis, fmt.Sprintf("timeline:%s:*", userID))
 }
 
 func (s *Service) UpdateTracking(ctx context.Context, userID, showID uuid.UUID, req UpdateTrackRequest) error {

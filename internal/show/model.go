@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"gorm.io/datatypes"
 )
 
 type Show struct {
@@ -27,6 +28,7 @@ type Show struct {
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	Seasons      []Season       `gorm:"foreignKey:ShowID" json:"seasons"`
+	Ratings      datatypes.JSON `gorm:"type:jsonb" json:"ratings"`
 }
 
 type Season struct {

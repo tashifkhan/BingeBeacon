@@ -3,6 +3,7 @@ package notification
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -26,7 +27,12 @@ func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := r.URL.Query().Get("status")
+	notifType := r.URL.Query().Get("type")
+	fromStr := r.URL.Query().Get("from")
+	toStr := r.URL.Query().Get("to")
 	pageStr := r.URL.Query().Get("page")
+	perPageStr := r.URL.Query().Get("per_page")
+
 	page := 1
 	if pageStr != "" {
 		p, err := strconv.Atoi(pageStr)
@@ -35,13 +41,36 @@ func (h *Handler) GetNotifications(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	result, err := h.svc.GetNotifications(r.Context(), userID, status, page)
+	limit := 20
+	if perPageStr != "" {
+		l, err := strconv.Atoi(perPageStr)
+		if err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	var from, to *time.Time
+	if fromStr != "" {
+		t, err := time.Parse(time.RFC3339, fromStr)
+		if err == nil {
+			from = &t
+		}
+	}
+	if toStr != "" {
+		t, err := time.Parse(time.RFC3339, toStr)
+		if err == nil {
+			to = &t
+		}
+	}
+
+	result, err := h.svc.GetNotifications(r.Context(), userID, status, notifType, from, to, page, limit)
 	if err != nil {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, result)
+	// Use no-cache (max-age=0) but provide ETag for 304 support
+	httputil.JSONWithCache(w, r, http.StatusOK, result, 0, 0)
 }
 
 func (h *Handler) MarkRead(w http.ResponseWriter, r *http.Request) {
@@ -95,5 +124,5 @@ func (h *Handler) GetUnreadCount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httputil.JSON(w, http.StatusOK, map[string]int64{"count": count})
+	httputil.JSONWithCache(w, r, http.StatusOK, map[string]int64{"count": count}, 30, 0)
 }
