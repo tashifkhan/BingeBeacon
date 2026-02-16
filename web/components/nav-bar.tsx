@@ -8,6 +8,8 @@ import {
   CalendarDays,
   Tv,
   Bell,
+  Bookmark,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUnreadCount } from "@/hooks/use-notifications";
@@ -16,7 +18,8 @@ import { useAuth } from "@/providers/auth-provider";
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: Home },
   { href: "/shows/search", label: "Search", icon: Search },
-  { href: "/timeline", label: "Timeline", icon: CalendarDays },
+  { href: "/watchlist", label: "Watchlist", icon: Bookmark },
+  { href: "/history", label: "History", icon: History },
   { href: "/tracking", label: "Tracking", icon: Tv },
   { href: "/notifications", label: "Alerts", icon: Bell },
 ] as const;

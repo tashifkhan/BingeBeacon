@@ -6,6 +6,9 @@ import Image from "next/image";
 import { useShowDetail, useSeasonDetail } from "@/hooks/use-shows";
 import { ShowRating } from "@/components/show-rating";
 import { TrackingToggle } from "@/components/tracking-toggle";
+import { AddToWatchlistButton } from "@/components/add-to-watchlist-button";
+import { StreamingProviders } from "@/components/streaming-providers";
+import { Showtimes } from "@/components/showtimes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -134,46 +137,59 @@ export default function ShowDetailPage() {
             {/* Ratings */}
             <ShowRating ratings={show.ratings} />
 
-            {/* Track button */}
-            <TrackingToggle
-              showId={show.id}
-              tmdbId={show.tmdb_id}
-            />
+            {/* Actions */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <TrackingToggle
+                showId={show.id}
+                tmdbId={show.tmdb_id}
+              />
+              <AddToWatchlistButton showId={show.id} />
+            </div>
           </div>
         </div>
 
-        {/* Overview */}
-        {show.overview && (
-          <div className="mt-8">
-            <h2 className="font-display text-lg font-semibold mb-2">Overview</h2>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {show.overview}
-            </p>
-          </div>
-        )}
+        <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_300px]">
+          <div className="min-w-0 space-y-8">
+            {/* Overview */}
+            {show.overview && (
+              <div>
+                <h2 className="font-display text-lg font-semibold mb-2">Overview</h2>
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {show.overview}
+                </p>
+              </div>
+            )}
 
-        <Separator className="my-8" />
+            <Separator />
 
-        {/* Seasons */}
-        {show.seasons && show.seasons.length > 0 && (
-          <div>
-            <h2 className="font-display text-lg font-semibold mb-4 flex items-center gap-2">
-              <Layers className="h-5 w-5 text-primary" />
-              Seasons ({show.seasons.length})
-            </h2>
-            <div className="space-y-3">
-              {show.seasons
-                .sort((a, b) => a.season_number - b.season_number)
-                .map((season) => (
-                  <SeasonAccordion
-                    key={season.id}
-                    season={season}
-                    showId={show.id}
-                  />
-                ))}
-            </div>
+            {/* Seasons */}
+            {show.seasons && show.seasons.length > 0 && (
+              <div>
+                <h2 className="font-display text-lg font-semibold mb-4 flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-primary" />
+                  Seasons ({show.seasons.length})
+                </h2>
+                <div className="space-y-3">
+                  {show.seasons
+                    .sort((a, b) => a.season_number - b.season_number)
+                    .map((season) => (
+                      <SeasonAccordion
+                        key={season.id}
+                        season={season}
+                        showId={show.id}
+                      />
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            <StreamingProviders showId={show.id} />
+            <Showtimes showId={show.id} mediaType={show.media_type} />
+          </div>
+        </div>
       </div>
     </div>
   );

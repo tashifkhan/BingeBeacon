@@ -257,3 +257,119 @@ export interface NotificationFilters {
 export interface UnreadCount {
   count: number;
 }
+
+// ---------- Watchlist ----------
+
+export interface WatchlistItem {
+  id: string;
+  user_id: string;
+  show_id: string;
+  show?: Show; // Helper to include show details if joined
+  priority: "low" | "medium" | "high";
+  notes: string;
+  added_at: string;
+}
+
+export interface CreateWatchlistItemRequest {
+  show_id: string;
+  priority?: "low" | "medium" | "high";
+  notes?: string;
+}
+
+export interface UpdateWatchlistItemRequest {
+  priority?: "low" | "medium" | "high";
+  notes?: string;
+}
+
+// ---------- Watch History ----------
+
+export interface WatchHistoryEntry {
+  id: string;
+  user_id: string;
+  show_id: string;
+  season_number: number;
+  episode_number: number;
+  watched_at: string;
+  rating?: number; // 1-10
+  notes?: string;
+  show_title?: string; // Joined field
+  show_poster_url?: string; // Joined field
+}
+
+export interface CreateHistoryEntryRequest {
+  show_id: string;
+  season_number: number;
+  episode_number: number;
+  watched_at?: string; // ISO timestamp
+  rating?: number;
+  notes?: string;
+}
+
+export interface UpdateHistoryEntryRequest {
+  watched_at?: string;
+  rating?: number;
+  notes?: string;
+}
+
+export interface HistoryStats {
+  total_episodes_watched: number;
+  total_time_minutes: number;
+  distinct_shows_watched: number;
+  this_month_count: number;
+}
+
+export interface ShowProgress {
+  show_id: string;
+  completed_episodes: number;
+  total_episodes: number;
+  percentage: number;
+  last_watched_at: string;
+}
+
+// ---------- Showtimes (MovieGlu) ----------
+
+export interface CinemaShowtime {
+  cinema_id: string;
+  cinema_name: string;
+  times: string[]; // "14:30"
+}
+
+export interface FilmShowtime {
+  film_id: string;
+  film_name: string;
+  showtimes: CinemaShowtime[];
+}
+
+export interface ShowtimesResponse {
+  show_id: string;
+  imdb_id: string;
+  date: string;
+  films: FilmShowtime[];
+}
+
+export interface Cinema {
+  cinema_id: string;
+  cinema_name: string;
+  distance?: string;
+  // logo_url, address, city, lat, lng might not be available in basic endpoint
+}
+
+export interface CinemasNearbyResponse {
+  cinemas: Cinema[];
+}
+
+// ---------- Streaming (TMDB) ----------
+
+export interface StreamingProvider {
+  provider_id: number;
+  provider_name: string;
+  logo_path: string;
+  display_priority: number;
+}
+
+export interface StreamingOptions {
+  link: string;
+  flatrate?: StreamingProvider[];
+  rent?: StreamingProvider[];
+  buy?: StreamingProvider[];
+}
