@@ -26,7 +26,12 @@ docker-up:
 docker-down:
 	docker-compose down
 
-# ---------- Frontend ----------
+# ---------- Setup ----------
+
+setup:
+	@if [ ! -f .env ]; then cp .env.example .env; fi
+	@cd web && if [ ! -L .env.local ]; then ln -s ../.env .env.local; fi
+	@echo "Environment setup complete. Please edit .env with your secrets."
 
 web-install:
 	cd web && bun install

@@ -1,85 +1,77 @@
 // ============================================================
-// BingeBeacon — Web Push Subscription
-// Subscribes the browser to push notifications and registers
-// the subscription endpoint with the Go backend.
+// BingeBeacon — Firebase Cloud Messaging (FCM) Setup
+// Initializes Firebase for the client and handles FCM tokens.
 // ============================================================
 
+import { initializeApp, getApps } from "firebase/app";
+import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { api } from "./api";
 
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
+
+// Initialize Firebase
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+
 /**
- * Subscribe to web push notifications.
- * Registers the subscription with the backend as a device.
+ * Request permission and get FCM token.
+ * Registers the token with the backend as a device.
  */
 export async function subscribeToPush(): Promise<boolean> {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-    console.warn("Push notifications not supported in this browser.");
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
     return false;
   }
 
   try {
-    const registration = await navigator.serviceWorker.ready;
-
-    // Check if already subscribed
-    const existing = await registration.pushManager.getSubscription();
-    if (existing) {
-      console.info("Already subscribed to push notifications.");
-      return true;
-    }
-
-    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!vapidKey) {
-      console.warn("VAPID public key not configured.");
+    const messaging = getMessaging(app);
+    
+    // Request permission
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      console.warn("Notification permission denied.");
       return false;
     }
 
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    // Get FCM Token
+    const token = await getToken(messaging, {
+      vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
     });
 
+    if (!token) {
+      console.warn("No FCM token received.");
+      return false;
+    }
+
     // Register with backend
+    // The backend expects the token in the 'device_token' field
     await api.post("/me/devices", {
-      device_token: JSON.stringify(subscription),
+      device_token: token,
       platform: "web",
     });
 
+    console.info("Successfully subscribed to BingeBeacon alerts.");
     return true;
   } catch (error) {
-    console.error("Failed to subscribe to push:", error);
+    console.error("Failed to subscribe to FCM:", error);
     return false;
   }
 }
 
 /**
- * Unsubscribe from push notifications.
+ * Setup foreground message listener.
  */
-export async function unsubscribeFromPush(): Promise<boolean> {
-  if (!("serviceWorker" in navigator)) return false;
-
-  try {
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-    if (subscription) {
-      await subscription.unsubscribe();
-    }
-    return true;
-  } catch (error) {
-    console.error("Failed to unsubscribe from push:", error);
-    return false;
-  }
-}
-
-/**
- * Convert a VAPID URL-safe base64 key to a Uint8Array.
- */
-function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  const buffer = new ArrayBuffer(rawData.length);
-  const outputArray = new Uint8Array(buffer);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
+export function onForegroundMessage(callback: (payload: any) => void) {
+  if (typeof window === "undefined") return;
+  
+  const messaging = getMessaging(app);
+  return onMessage(messaging, (payload) => {
+    console.log("Foreground message received:", payload);
+    callback(payload);
+  });
 }
