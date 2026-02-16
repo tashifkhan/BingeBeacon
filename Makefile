@@ -20,8 +20,11 @@ migrate-down:
 migrate-create:
 	migrate create -ext sql -dir migrations -seq $(name)
 
-docker-up:
-	docker-compose up -d
+docker-dev:
+	docker-compose -f docker-compose.dev.yml up -d
+
+docker-prod:
+	docker-compose -f docker-compose.yml up -d --build
 
 docker-down:
 	docker-compose down

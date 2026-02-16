@@ -1,24 +1,24 @@
 services:
   api:
     build: .
-    restart: always
     ports:
       - "8080:8080"
     env_file:
       - .env
     environment:
-      - SERVER_ENVIRONMENT=production
+      - SERVER_ENVIRONMENT=development
     depends_on:
       - postgres
       - redis
+    volumes:
+      - ./.env:/app/.env
 
   postgres:
     image: postgres:16-alpine
-    restart: always
     environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
-      POSTGRES_DB: ${DB_NAME:-bingebeacon}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: bingebeacon
     ports:
       - "5432:5432"
     volumes:
@@ -26,7 +26,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    restart: always
     ports:
       - "6379:6379"
     volumes:
@@ -34,7 +33,6 @@ services:
 
   web:
     build: ./web
-    restart: always
     ports:
       - "3000:3000"
     env_file:
