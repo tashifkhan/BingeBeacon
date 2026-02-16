@@ -1,6 +1,8 @@
 package alert
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -43,6 +45,16 @@ func (r *Repository) GetFavorites(userID uuid.UUID) ([]UserTrackedShow, error) {
 
 func (r *Repository) Update(track *UserTrackedShow) error {
 	return r.db.Save(track).Error
+}
+
+func (r *Repository) UpdateLastWatched(userID, showID uuid.UUID, seasonNumber, episodeNumber int) error {
+	return r.db.Model(&UserTrackedShow{}).
+		Where("user_id = ? AND show_id = ?", userID, showID).
+		Updates(map[string]interface{}{
+			"last_watched_season":  seasonNumber,
+			"last_watched_episode": episodeNumber,
+			"updated_at":           time.Now(),
+		}).Error
 }
 
 func (r *Repository) Delete(userID, showID uuid.UUID) error {

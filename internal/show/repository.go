@@ -90,6 +90,23 @@ func (r *Repository) GetEpisodes(showID uuid.UUID, upcoming bool) ([]Episode, er
 	return episodes, nil
 }
 
+func (r *Repository) GetEpisodeByNumber(showID uuid.UUID, seasonNum, episodeNum int) (*Episode, error) {
+	var episode Episode
+	if err := r.db.Where("show_id = ? AND season_number = ? AND episode_number = ?", showID, seasonNum, episodeNum).
+		First(&episode).Error; err != nil {
+		return nil, err
+	}
+	return &episode, nil
+}
+
+func (r *Repository) CountEpisodes(showID uuid.UUID) (int, error) {
+	var count int64
+	if err := r.db.Model(&Episode{}).Where("show_id = ?", showID).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
 func (r *Repository) UpsertSeason(season *Season) error {
 	// Find existing or create
 	var existing Season

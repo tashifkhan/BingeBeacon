@@ -16,7 +16,9 @@ import (
 	"github.com/tashifkhan/bingebeacon/internal/alert"
 	"github.com/tashifkhan/bingebeacon/internal/auth"
 	"github.com/tashifkhan/bingebeacon/internal/config"
+	"github.com/tashifkhan/bingebeacon/internal/history"
 	"github.com/tashifkhan/bingebeacon/internal/metadata"
+	"github.com/tashifkhan/bingebeacon/internal/metadata/movieglu"
 	"github.com/tashifkhan/bingebeacon/internal/metadata/omdb"
 	"github.com/tashifkhan/bingebeacon/internal/metadata/thetvdb"
 	"github.com/tashifkhan/bingebeacon/internal/metadata/tmdb"
@@ -28,8 +30,10 @@ import (
 	"github.com/tashifkhan/bingebeacon/internal/scheduler"
 	"github.com/tashifkhan/bingebeacon/internal/scheduler/jobs"
 	"github.com/tashifkhan/bingebeacon/internal/show"
+	"github.com/tashifkhan/bingebeacon/internal/showtimes"
 	"github.com/tashifkhan/bingebeacon/internal/timeline"
 	"github.com/tashifkhan/bingebeacon/internal/user"
+	"github.com/tashifkhan/bingebeacon/internal/watchlist"
 	"gorm.io/gorm"
 )
 
@@ -73,11 +77,14 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	alertRepo := alert.NewRepository(database)
 	timelineRepo := timeline.NewRepository(database)
 	notifRepo := notification.NewRepository(database)
+	watchlistRepo := watchlist.NewRepository(database)
+	historyRepo := history.NewRepository(database)
 
 	// External Clients
 	tmdbClient := tmdb.NewClient(cfg.TMDB, log)
 	omdbClient := omdb.NewClient(cfg.OMDB)
 	thetvdbClient := thetvdb.NewClient(cfg.TheTVDB, log)
+	movieGluClient := movieglu.NewClient(cfg.MovieGlu)
 
 	// FCM (Optional - warn if failed)
 	fcmClient, err := notification.NewFCMClient(cfg.FCM.CredentialsFile, log)
@@ -91,6 +98,9 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	authSvc := auth.NewService(authRepo, userRepo, cfg.JWT)
 	showSvc := show.NewService(showRepo, tmdbClient, rdb)
 	notifSvc := notification.NewService(notifRepo, rdb)
+	watchlistSvc := watchlist.NewService(watchlistRepo, showRepo, alertRepo)
+	historySvc := history.NewService(historyRepo, showRepo, alertRepo)
+	showtimesSvc := showtimes.NewService(movieGluClient, showRepo, rdb)
 
 	// Syncer
 	syncer := metadata.NewSyncer(tmdbClient, omdbClient, thetvdbClient, showRepo, alertRepo, timelineRepo, rdb, log)
@@ -105,6 +115,9 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	alertHandler := alert.NewHandler(alertSvc)
 	timelineHandler := timeline.NewHandler(timelineSvc)
 	notifHandler := notification.NewHandler(notifSvc)
+	watchlistHandler := watchlist.NewHandler(watchlistSvc)
+	historyHandler := history.NewHandler(historySvc)
+	showtimesHandler := showtimes.NewHandler(showtimesSvc)
 
 	// Scheduler
 	sched := scheduler.NewScheduler(log)
@@ -167,6 +180,32 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	notifRouter.HandleFunc("/unread-count", notifHandler.GetUnreadCount).Methods("GET")
 	notifRouter.HandleFunc("/read-all", notifHandler.MarkAllRead).Methods("POST")
 	notifRouter.HandleFunc("/{id}/read", notifHandler.MarkRead).Methods("PATCH")
+
+	// Watchlist Routes (Protected)
+	watchlistRouter := api.PathPrefix("/watchlist").Subrouter()
+	watchlistRouter.Use(authMiddleware.Authenticate)
+	watchlistRouter.HandleFunc("", watchlistHandler.List).Methods("GET")
+	watchlistRouter.HandleFunc("", watchlistHandler.Add).Methods("POST")
+	watchlistRouter.HandleFunc("/{show_id}", watchlistHandler.Update).Methods("PATCH")
+	watchlistRouter.HandleFunc("/{show_id}", watchlistHandler.Remove).Methods("DELETE")
+	watchlistRouter.HandleFunc("/{show_id}/start-tracking", watchlistHandler.StartTracking).Methods("POST")
+
+	// Watch History Routes (Protected)
+	historyRouter := api.PathPrefix("/history").Subrouter()
+	historyRouter.Use(authMiddleware.Authenticate)
+	historyRouter.HandleFunc("", historyHandler.List).Methods("GET")
+	historyRouter.HandleFunc("", historyHandler.Create).Methods("POST")
+	historyRouter.HandleFunc("/batch", historyHandler.CreateBatch).Methods("POST")
+	historyRouter.HandleFunc("/{id}", historyHandler.Update).Methods("PATCH")
+	historyRouter.HandleFunc("/{id}", historyHandler.Delete).Methods("DELETE")
+	historyRouter.HandleFunc("/stats", historyHandler.Stats).Methods("GET")
+	historyRouter.HandleFunc("/{show_id}/progress", historyHandler.Progress).Methods("GET")
+
+	// Showtimes Routes (Protected)
+	showtimesRouter := api.PathPrefix("/showtimes").Subrouter()
+	showtimesRouter.Use(authMiddleware.Authenticate)
+	showtimesRouter.HandleFunc("/cinemas/nearby", showtimesHandler.GetCinemasNearby).Methods("GET")
+	showtimesRouter.HandleFunc("/{show_id}", showtimesHandler.GetShowtimes).Methods("GET")
 
 	// Internal/Admin Routes
 	internalRouter := r.PathPrefix("/api/internal").Subrouter()

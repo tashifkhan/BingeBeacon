@@ -42,4 +42,7 @@ web/public/sw.js.map
 web/public/swe-worker-*.js
 web/public/workbox-*.js
 web/public/workbox-*.js.map
+
+# Local dev data
+data/
 web/public/firebase-messaging-sw.js

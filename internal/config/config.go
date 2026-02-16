@@ -17,6 +17,7 @@ type Config struct {
 	OMDB     OMDBConfig
 	TheTVDB  TheTVDBConfig
 	FCM      FCMConfig
+	MovieGlu MovieGluConfig
 }
 
 type ServerConfig struct {
@@ -65,6 +66,14 @@ type FCMConfig struct {
 	CredentialsFile string `mapstructure:"credentials_file"`
 }
 
+type MovieGluConfig struct {
+	APIKey        string `mapstructure:"api_key"`
+	Authorization string `mapstructure:"authorization"`
+	ClientID      string `mapstructure:"client_id"`
+	Territory     string `mapstructure:"territory"`
+	BaseURL       string `mapstructure:"base_url"`
+}
+
 func Load() *Config {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -82,6 +91,7 @@ func Load() *Config {
 	viper.SetDefault("tmdb.base_url", "https://api.themoviedb.org/3")
 	viper.SetDefault("omdb.base_url", "https://www.omdbapi.com")
 	viper.SetDefault("thetvdb.base_url", "https://api4.thetvdb.com/v4")
+	viper.SetDefault("movieglu.base_url", "https://api.movieglu.com")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
