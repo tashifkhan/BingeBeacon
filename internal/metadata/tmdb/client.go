@@ -112,3 +112,12 @@ func (c *Client) GetPopular(ctx context.Context, mediaType string, page int) (*P
 	}, &resp)
 	return &resp, err
 }
+
+func (c *Client) GetWatchProviders(ctx context.Context, mediaType string, tmdbID int) (*WatchProvidersResponse, error) {
+	var resp WatchProvidersResponse
+	path := fmt.Sprintf("/%s/%d/watch/providers", mediaType, tmdbID)
+	if err := c.do(ctx, "GET", path, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}

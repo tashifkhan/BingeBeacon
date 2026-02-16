@@ -31,6 +31,7 @@ import (
 	"github.com/tashifkhan/bingebeacon/internal/scheduler/jobs"
 	"github.com/tashifkhan/bingebeacon/internal/show"
 	"github.com/tashifkhan/bingebeacon/internal/showtimes"
+	"github.com/tashifkhan/bingebeacon/internal/streaming"
 	"github.com/tashifkhan/bingebeacon/internal/timeline"
 	"github.com/tashifkhan/bingebeacon/internal/user"
 	"github.com/tashifkhan/bingebeacon/internal/watchlist"
@@ -101,6 +102,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	watchlistSvc := watchlist.NewService(watchlistRepo, showRepo, alertRepo)
 	historySvc := history.NewService(historyRepo, showRepo, alertRepo)
 	showtimesSvc := showtimes.NewService(movieGluClient, showRepo, rdb)
+	streamingSvc := streaming.NewService(showRepo, tmdbClient, rdb)
 
 	// Syncer
 	syncer := metadata.NewSyncer(tmdbClient, omdbClient, thetvdbClient, showRepo, alertRepo, timelineRepo, rdb, log)
@@ -118,6 +120,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	watchlistHandler := watchlist.NewHandler(watchlistSvc)
 	historyHandler := history.NewHandler(historySvc)
 	showtimesHandler := showtimes.NewHandler(showtimesSvc)
+	streamingHandler := streaming.NewHandler(streamingSvc)
 
 	// Scheduler
 	sched := scheduler.NewScheduler(log)
@@ -206,6 +209,11 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	showtimesRouter.Use(authMiddleware.Authenticate)
 	showtimesRouter.HandleFunc("/cinemas/nearby", showtimesHandler.GetCinemasNearby).Methods("GET")
 	showtimesRouter.HandleFunc("/{show_id}", showtimesHandler.GetShowtimes).Methods("GET")
+
+	// Streaming Providers (Protected)
+	streamingRouter := api.PathPrefix("/streaming").Subrouter()
+	streamingRouter.Use(authMiddleware.Authenticate)
+	streamingRouter.HandleFunc("/{show_id}", streamingHandler.GetStreaming).Methods("GET")
 
 	// Internal/Admin Routes
 	internalRouter := r.PathPrefix("/api/internal").Subrouter()

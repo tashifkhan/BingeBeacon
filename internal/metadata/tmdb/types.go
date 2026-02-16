@@ -32,6 +32,24 @@ type ExternalIDsResponse struct {
 	ID          int     `json:"id"`
 }
 
+type WatchProvidersResponse struct {
+	Results map[string]WatchRegion `json:"results"`
+}
+
+type WatchRegion struct {
+	Link     string          `json:"link"`
+	Flatrate []WatchProvider `json:"flatrate"`
+	Rent     []WatchProvider `json:"rent"`
+	Buy      []WatchProvider `json:"buy"`
+}
+
+type WatchProvider struct {
+	DisplayPriority int    `json:"display_priority"`
+	LogoPath        string `json:"logo_path"`
+	ProviderID      int    `json:"provider_id"`
+	ProviderName    string `json:"provider_name"`
+}
+
 type TVShowDetail struct {
 	ID           int       `json:"id"`
 	Name         string    `json:"name"`
