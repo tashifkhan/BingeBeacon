@@ -1,0 +1,27 @@
+{
+  "name": "BingeBeacon",
+  "short_name": "BingeBeacon",
+  "description": "Track your favorite TV shows and movies. Get notified about new episodes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0F1A",
+  "theme_color": "#0B0F1A",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["entertainment"],
+  "lang": "en",
+  "dir": "ltr"
+}

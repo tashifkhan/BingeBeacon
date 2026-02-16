@@ -1,4 +1,4 @@
-.PHONY: build run dev migrate-up migrate-down migrate-create docker-up docker-down
+.PHONY: build run dev migrate-up migrate-down migrate-create docker-up docker-down web-install web-dev web-build
 
 BINARY_NAME=bingebeacon
 
@@ -25,3 +25,14 @@ docker-up:
 
 docker-down:
 	docker-compose down
+
+# ---------- Frontend ----------
+
+web-install:
+	cd web && bun install
+
+web-dev:
+	cd web && bun dev
+
+web-build:
+	cd web && bun run build

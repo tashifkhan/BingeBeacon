@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#0B0F1A"/>
+  <rect x="32" y="32" width="448" height="448" rx="72" fill="#141925"/>
+  <!-- Beacon glow rings -->
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#F59E0B" stroke-width="2" opacity="0.12"/>
+  <circle cx="256" cy="256" r="115" fill="none" stroke="#F59E0B" stroke-width="2.5" opacity="0.2"/>
+  <circle cx="256" cy="256" r="80" fill="none" stroke="#F59E0B" stroke-width="3" opacity="0.3"/>
+  <circle cx="256" cy="256" r="50" fill="none" stroke="#F59E0B" stroke-width="3.5" opacity="0.5"/>
+  <!-- Center beacon dot -->
+  <circle cx="256" cy="256" r="28" fill="#F59E0B"/>
+  <circle cx="256" cy="256" r="14" fill="#0B0F1A"/>
+  <circle cx="256" cy="256" r="7" fill="#F59E0B"/>
+</svg>

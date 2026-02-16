@@ -29,3 +29,16 @@ vendor/
 # Key files
 *.key
 *.pem
+
+# Compiled binary
+main
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+web/public/sw.js
+web/public/sw.js.map
+web/public/swe-worker-*.js
+web/public/workbox-*.js
+web/public/workbox-*.js.map
