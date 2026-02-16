@@ -26,11 +26,15 @@ Before starting, ensure you have the following installed:
 
 BingeBeacon uses a **single master `.env` file** in the root directory for both the backend and frontend.
 
-1.  Run the setup command to create the master `.env` and link it to the frontend:
+1.  Create the root `.env` by copying the example:
     ```bash
-    make setup
+    cp .env.example .env
     ```
-2.  Edit the root `.env` and populate it with your keys.
+2.  Create the frontend env symlink so Next.js reads the same `.env`:
+    ```bash
+    ln -s ../.env web/.env.local
+    ```
+3.  Edit the root `.env` and populate it with your keys. If any value contains spaces, wrap it in quotes (for example, `MOVIEGLU_AUTHORIZATION="Basic <base64>"`).
 
 ### Root `.env` (Master)
 ```env
@@ -79,17 +83,19 @@ It pulls the configuration from your root `.env` file. You do not need to edit i
 
 1. **Infrastructure**: Start PostgreSQL and Redis using Docker.
    ```bash
-   docker-compose up -d postgres redis
+   docker-compose -f docker-compose.dev.yml up -d postgres redis
    ```
 
 2. **Backend**:
    ```bash
    # Install dependencies
    go mod download
-   # Run migrations
-   make migrate-up
+
+   # Run migrations (Dockerized migrate using compose)
+   docker-compose -f docker-compose.dev.yml up migrate
+
    # Start server
-   make dev
+   go run ./cmd/server/main.go
    ```
 
 3. **Frontend**:
@@ -103,7 +109,7 @@ It pulls the configuration from your root `.env` file. You do not need to edit i
 ### Option B: Full Docker Development
 
 ```bash
-docker-compose up --build
+docker-compose -f docker-compose.dev.yml up --build
 ```
 *Note: Service worker (Serwist) is disabled in development mode by default.*
 
@@ -125,15 +131,82 @@ This will:
 - Build and start the **Go API** (Port 8080)
 - Build the **Next.js PWA** using a multi-stage Bun build and serve it (Port 3000)
 
-### Manual Production Build
+### Docker Compose File
 
-**Backend**:
-```bash
-CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/server/main.go
+Use this `docker-compose.yml` (already in the repo root):
+```yaml
+services:
+  api:
+    build: .
+    restart: always
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - SERVER_ENVIRONMENT=production
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DATABASE_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-password}
+      POSTGRES_DB: ${DATABASE_DBNAME:-bingebeacon}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+
+  web:
+    build: ./web
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    depends_on:
+      - api
 ```
 
-**Frontend**:
+### Manual Production Build
+
+**Backend (Dockerfile build)**:
 ```bash
+# Build backend image
+docker build -t bingebeacon-api:latest -f Dockerfile .
+
+# Run backend container
+docker run --rm -p 8080:8080 --env-file .env bingebeacon-api:latest
+```
+
+**Frontend (Dockerfile build)**:
+```bash
+# Build frontend image
+docker build -t bingebeacon-web:latest -f web/Dockerfile ./web
+
+# Run frontend container
+docker run --rm -p 3000:3000 --env-file .env bingebeacon-web:latest
+```
+
+**Manual (non-Docker) Production Build**:
+```bash
+# Backend
+CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/bingebeacon ./cmd/server/main.go
+./bin/bingebeacon
+
+# Frontend
 cd web
 bun install
 bun run build # Uses --webpack internally for Serwist compatibility
@@ -145,9 +218,23 @@ bun start
 ## 6. Migrations
 
 Database migrations are located in `/migrations`.
-- **Up**: `make migrate-up`
-- **Down**: `make migrate-down`
-- **New Migration**: `make migrate-create name=description_here`
+- **Up**:
+  ```bash
+  migrate -path ./migrations -database "postgres://$DATABASE_USER:$DATABASE_PASSWORD@$DATABASE_HOST:$DATABASE_PORT/$DATABASE_DBNAME?sslmode=$DATABASE_SSLMODE" up
+  ```
+- **Down**:
+  ```bash
+  migrate -path ./migrations -database "postgres://$DATABASE_USER:$DATABASE_PASSWORD@$DATABASE_HOST:$DATABASE_PORT/$DATABASE_DBNAME?sslmode=$DATABASE_SSLMODE" down
+  ```
+- **New Migration**:
+  ```bash
+  migrate create -ext sql -dir ./migrations -seq description_here
+  ```
+
+If you use the dev compose file, you can also run migrations via Docker:
+```bash
+docker-compose -f docker-compose.dev.yml up migrate
+```
 
 ---
 

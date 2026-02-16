@@ -10,7 +10,6 @@ import { AddToWatchlistButton } from "@/components/add-to-watchlist-button";
 import { StreamingProviders } from "@/components/streaming-providers";
 import { Showtimes } from "@/components/showtimes";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -68,7 +67,7 @@ export default function ShowDetailPage() {
         <div
           className={cn(
             "flex flex-col gap-6 sm:flex-row",
-            backdrop ? "-mt-24 relative z-10" : "pt-6"
+            backdrop ? "-mt-24 relative z-10" : "pt-6",
           )}
         >
           {/* Poster */}
@@ -139,10 +138,7 @@ export default function ShowDetailPage() {
 
             {/* Actions */}
             <div className="flex flex-wrap items-center gap-3 pt-2">
-              <TrackingToggle
-                showId={show.id}
-                tmdbId={show.tmdb_id}
-              />
+              <TrackingToggle showId={show.id} tmdbId={show.tmdb_id} />
               <AddToWatchlistButton showId={show.id} />
             </div>
           </div>
@@ -153,7 +149,9 @@ export default function ShowDetailPage() {
             {/* Overview */}
             {show.overview && (
               <div>
-                <h2 className="font-display text-lg font-semibold mb-2">Overview</h2>
+                <h2 className="font-display text-lg font-semibold mb-2">
+                  Overview
+                </h2>
                 <p className="text-sm leading-relaxed text-muted-foreground">
                   {show.overview}
                 </p>
@@ -206,7 +204,7 @@ function SeasonAccordion({
   const [isOpen, setIsOpen] = useState(false);
   const { data: fullSeason, isLoading } = useSeasonDetail(
     showId,
-    isOpen ? season.season_number : 0
+    isOpen ? season.season_number : 0,
   );
 
   const episodes = fullSeason?.episodes ?? season.episodes ?? [];

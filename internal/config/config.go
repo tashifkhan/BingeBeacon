@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 )
 
@@ -75,6 +76,8 @@ type MovieGluConfig struct {
 }
 
 func Load() *Config {
+	_ = godotenv.Load()
+
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
@@ -86,11 +89,30 @@ func Load() *Config {
 	// Set defaults
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.environment", "development")
+	viper.SetDefault("database.host", "localhost")
+	viper.SetDefault("database.port", 5432)
+	viper.SetDefault("database.user", "postgres")
+	viper.SetDefault("database.password", "")
+	viper.SetDefault("database.dbname", "bingebeacon")
+	viper.SetDefault("database.sslmode", "disable")
+	viper.SetDefault("redis.addr", "localhost:6379")
+	viper.SetDefault("redis.password", "")
+	viper.SetDefault("redis.db", 0)
+	viper.SetDefault("jwt.secret", "")
 	viper.SetDefault("jwt.access_token_ttl", 15*time.Minute)
 	viper.SetDefault("jwt.refresh_token_ttl", 168*time.Hour)
+	viper.SetDefault("tmdb.api_key", "")
 	viper.SetDefault("tmdb.base_url", "https://api.themoviedb.org/3")
+	viper.SetDefault("omdb.api_key", "")
 	viper.SetDefault("omdb.base_url", "https://www.omdbapi.com")
+	viper.SetDefault("thetvdb.api_key", "")
+	viper.SetDefault("thetvdb.pin", "")
 	viper.SetDefault("thetvdb.base_url", "https://api4.thetvdb.com/v4")
+	viper.SetDefault("fcm.credentials_file", "firebase-credentials.json")
+	viper.SetDefault("movieglu.api_key", "")
+	viper.SetDefault("movieglu.authorization", "")
+	viper.SetDefault("movieglu.client_id", "")
+	viper.SetDefault("movieglu.territory", "US")
 	viper.SetDefault("movieglu.base_url", "https://api.movieglu.com")
 
 	if err := viper.ReadInConfig(); err != nil {
