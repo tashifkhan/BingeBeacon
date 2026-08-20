@@ -48,9 +48,10 @@ func (s *Service) GetTimeline(ctx context.Context, userID uuid.UUID, from, to ti
 }
 
 func (s *Service) GetToday(ctx context.Context, userID uuid.UUID) ([]TimelineEventResponse, error) {
-	key := fmt.Sprintf("timeline:%s:today", userID)
+	timezone := s.repo.GetUserTimezone(userID)
+	key := fmt.Sprintf("timeline:%s:today:%s", userID, timezone)
 	return cache.GetOrSet(ctx, s.redis, key, 2*time.Minute, func() ([]TimelineEventResponse, error) {
-		events, err := s.repo.GetTodayEvents(userID, "UTC")
+		events, err := s.repo.GetTodayEvents(userID, timezone)
 		if err != nil {
 			return nil, err
 		}
@@ -59,9 +60,10 @@ func (s *Service) GetToday(ctx context.Context, userID uuid.UUID) ([]TimelineEve
 }
 
 func (s *Service) GetThisWeek(ctx context.Context, userID uuid.UUID) ([]TimelineEventResponse, error) {
-	key := fmt.Sprintf("timeline:%s:week", userID)
+	timezone := s.repo.GetUserTimezone(userID)
+	key := fmt.Sprintf("timeline:%s:week:%s", userID, timezone)
 	return cache.GetOrSet(ctx, s.redis, key, 2*time.Minute, func() ([]TimelineEventResponse, error) {
-		events, err := s.repo.GetWeekEvents(userID, "UTC")
+		events, err := s.repo.GetWeekEvents(userID, timezone)
 		if err != nil {
 			return nil, err
 		}
