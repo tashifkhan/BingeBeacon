@@ -1,10 +1,12 @@
 package notification
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Repository struct {
@@ -16,7 +18,7 @@ func NewRepository(db *gorm.DB) *Repository {
 }
 
 func (r *Repository) Create(notif *Notification) error {
-	return r.db.Create(notif).Error
+	return r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(notif).Error
 }
 
 func (r *Repository) GetPendingDue(limit int) ([]Notification, error) {
@@ -46,10 +48,57 @@ func (r *Repository) MarkFailed(id uuid.UUID) error {
 		Update("status", "failed").Error
 }
 
+func (r *Repository) RetryOrFail(id uuid.UUID, dispatchErr error, maxAttempts int) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var notif Notification
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&notif, "id = ?", id).Error; err != nil {
+			return err
+		}
+		notif.RetryCount++
+		message := "notification delivery failed"
+		if dispatchErr != nil {
+			message = dispatchErr.Error()
+		}
+		notif.LastError = &message
+		if notif.RetryCount >= maxAttempts {
+			notif.Status = "failed"
+		} else {
+			notif.Status = "pending"
+			notif.ScheduledFor = time.Now().Add(time.Duration(1<<notif.RetryCount) * time.Minute)
+		}
+		return tx.Model(&Notification{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"status": notif.Status, "retry_count": notif.RetryCount,
+			"last_error": message, "scheduled_for": notif.ScheduledFor,
+		}).Error
+	})
+}
+
+func (r *Repository) ClaimPendingDue(limit int) ([]Notification, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("limit must be positive")
+	}
+	var notifications []Notification
+	err := r.db.Raw(`
+		WITH due AS (
+			SELECT id FROM notifications
+			WHERE status = 'pending' AND scheduled_for <= NOW()
+			ORDER BY scheduled_for ASC
+			FOR UPDATE SKIP LOCKED
+			LIMIT ?
+		)
+		UPDATE notifications AS n
+		SET scheduled_for = NOW() + INTERVAL '5 minutes'
+		FROM due
+		WHERE n.id = due.id
+		RETURNING n.*
+	`, limit).Scan(&notifications).Error
+	return notifications, err
+}
+
 func (r *Repository) MarkRead(id uuid.UUID, userID uuid.UUID) error {
 	now := time.Now()
 	return r.db.Model(&Notification{}).
-		Where("id = ? AND user_id = ?", id, userID).
+		Where("id = ? AND user_id = ? AND status = ?", id, userID, "sent").
 		Updates(map[string]interface{}{
 			"status":  "read",
 			"read_at": now,
@@ -60,7 +109,7 @@ func (r *Repository) MarkAllRead(userID uuid.UUID) error {
 	now := time.Now()
 	// Update all unread notifications to 'read'
 	return r.db.Model(&Notification{}).
-		Where("user_id = ? AND status != ?", userID, "read").
+		Where("user_id = ? AND status = ?", userID, "sent").
 		Updates(map[string]interface{}{
 			"status":  "read",
 			"read_at": now,
@@ -78,7 +127,7 @@ func (r *Repository) GetByUser(userID uuid.UUID, status string, notifType string
 	}
 
 	if notifType != "" {
-		db = db.Where("type = ?", notifType)
+		db = db.Where("payload ->> 'type' = ?", notifType)
 	}
 
 	if from != nil {

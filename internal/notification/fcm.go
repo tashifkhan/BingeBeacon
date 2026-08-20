@@ -82,3 +82,7 @@ func (c *FCMClient) SendToMultiple(ctx context.Context, tokens []string, title, 
 	c.logger.Debug("Sent multicast message", "success_count", br.SuccessCount, "failure_count", br.FailureCount)
 	return br, nil
 }
+
+func IsUnregisteredToken(err error) bool {
+	return messaging.IsRegistrationTokenNotRegistered(err)
+}
