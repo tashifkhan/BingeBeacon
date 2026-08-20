@@ -37,6 +37,7 @@ func NewService(repo *Repository, showSvc *show.Service, showRepo *show.Reposito
 type TrackRequest struct {
 	ShowID             *uuid.UUID `json:"show_id"`
 	TMDBID             *int       `json:"tmdb_id"`
+	MediaType          string     `json:"media_type"`
 	IsFavorite         *bool      `json:"is_favorite"`
 	NotifyNewEpisode   *bool      `json:"notify_new_episode"`
 	NotifyNewSeason    *bool      `json:"notify_new_season"`
@@ -78,7 +79,7 @@ func (s *Service) TrackShow(ctx context.Context, userID uuid.UUID, req TrackRequ
 		showID = *req.ShowID
 	} else if req.TMDBID != nil {
 		// Get or Create
-		show, err := s.showSvc.GetOrCreateByTMDBID(ctx, *req.TMDBID)
+		show, err := s.showSvc.GetOrCreateByTMDBID(ctx, *req.TMDBID, req.MediaType)
 		if err != nil {
 			return err
 		}

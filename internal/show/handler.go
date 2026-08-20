@@ -1,6 +1,7 @@
 package show
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -8,6 +9,11 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/tashifkhan/bingebeacon/internal/pkg/httputil"
 )
+
+type ImportRequest struct {
+	TMDBID    int    `json:"tmdb_id"`
+	MediaType string `json:"media_type"`
+}
 
 type Handler struct {
 	svc *Service
@@ -33,6 +39,44 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httputil.JSONWithCache(w, r, http.StatusOK, results, 60, 300)
+}
+
+func (h *Handler) Import(w http.ResponseWriter, r *http.Request) {
+	var req ImportRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if req.TMDBID <= 0 {
+		httputil.Error(w, http.StatusBadRequest, "tmdb_id must be positive")
+		return
+	}
+
+	result, err := h.svc.GetOrCreateByTMDBID(r.Context(), req.TMDBID, req.MediaType)
+	if err != nil {
+		httputil.Error(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	httputil.JSON(w, http.StatusCreated, result)
+}
+
+func (h *Handler) Trending(w http.ResponseWriter, r *http.Request) {
+	results, err := h.svc.GetTrending(r.Context(), r.URL.Query().Get("type"), r.URL.Query().Get("window"))
+	if err != nil {
+		httputil.Error(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	httputil.JSONWithCache(w, r, http.StatusOK, results, 300, 3600)
+}
+
+func (h *Handler) Popular(w http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	results, err := h.svc.GetPopular(r.Context(), r.URL.Query().Get("type"), page)
+	if err != nil {
+		httputil.Error(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	httputil.JSONWithCache(w, r, http.StatusOK, results, 300, 3600)
 }
 
 func (h *Handler) GetShow(w http.ResponseWriter, r *http.Request) {
