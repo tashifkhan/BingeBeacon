@@ -8,9 +8,10 @@ import (
 )
 
 type Job struct {
-	Name     string
-	Interval time.Duration
-	Run      func(ctx context.Context) error
+	Name         string
+	Interval     time.Duration
+	InitialDelay time.Duration
+	Run          func(ctx context.Context) error
 }
 
 type Scheduler struct {
@@ -52,9 +53,19 @@ func (s *Scheduler) runJob(job Job) {
 
 	s.logger.Info("Job started", "name", job.Name, "interval", job.Interval)
 
-	// Initial run? Or wait for first interval?
-	// Usually wait first. If we want immediate run, logic differs.
-	// For periodic sync, wait is fine.
+	initialDelay := job.Interval
+	if job.InitialDelay > 0 {
+		initialDelay = job.InitialDelay
+	}
+	initialTimer := time.NewTimer(initialDelay)
+	defer initialTimer.Stop()
+	select {
+	case <-s.stop:
+		s.logger.Info("Job stopped", "name", job.Name)
+		return
+	case <-initialTimer.C:
+		s.executeJob(job)
+	}
 
 	ticker := time.NewTicker(job.Interval)
 	defer ticker.Stop()

@@ -72,6 +72,9 @@ type Rating struct {
 }
 
 func (c *Client) SearchByTitle(ctx context.Context, title string) (*SearchResponse, error) {
+	if c.apiKey == "" {
+		return nil, fmt.Errorf("OMDB_API_KEY is not configured")
+	}
 	u, err := url.Parse(c.baseURL)
 	if err != nil {
 		return nil, err
@@ -91,6 +94,9 @@ func (c *Client) SearchByTitle(ctx context.Context, title string) (*SearchRespon
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("omdb api error: status %d", resp.StatusCode)
+	}
 
 	var result SearchResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -105,6 +111,9 @@ func (c *Client) SearchByTitle(ctx context.Context, title string) (*SearchRespon
 }
 
 func (c *Client) GetByIMDBID(ctx context.Context, imdbID string) (*DetailResponse, error) {
+	if c.apiKey == "" {
+		return nil, fmt.Errorf("OMDB_API_KEY is not configured")
+	}
 	u, err := url.Parse(c.baseURL)
 	if err != nil {
 		return nil, err
@@ -124,6 +133,9 @@ func (c *Client) GetByIMDBID(ctx context.Context, imdbID string) (*DetailRespons
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("omdb api error: status %d", resp.StatusCode)
+	}
 
 	var result DetailResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

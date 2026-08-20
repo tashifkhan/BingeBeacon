@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/tashifkhan/bingebeacon/internal/config"
@@ -20,6 +21,7 @@ type Client struct {
 	logger     *slog.Logger
 	token      string
 	tokenExp   time.Time
+	authMu     sync.Mutex
 }
 
 func NewClient(cfg config.TheTVDBConfig, logger *slog.Logger) *Client {
@@ -35,6 +37,11 @@ func NewClient(cfg config.TheTVDBConfig, logger *slog.Logger) *Client {
 }
 
 func (c *Client) authenticate(ctx context.Context) error {
+	if c.apiKey == "" {
+		return fmt.Errorf("THETVDB_API_KEY is not configured")
+	}
+	c.authMu.Lock()
+	defer c.authMu.Unlock()
 	// If token is valid (with 5 min buffer), reuse it
 	if c.token != "" && time.Now().Add(5*time.Minute).Before(c.tokenExp) {
 		return nil
