@@ -1,255 +1,253 @@
 # BingeBeacon Deployment Guide
 
-This guide covers the setup and deployment of BingeBeacon, a PWA-enabled TV/Movie show tracking and alert system.
+Setup and deployment for BingeBeacon — a PWA TV/movie tracking and alert system.
 
-## Stack Overview
-- **Backend**: Go (Golang) 1.24+
-- **Database**: PostgreSQL 16+ (with JSONB support)
-- **Cache/Rate Limiting**: Redis 7+
-- **Frontend**: Next.js 16 (App Router), React 19, Tailwind v4
-- **PWA**: Serwist (Service Workers)
-- **Package Manager**: Bun
+For the exhaustive list of environment variables and how to obtain every
+credential, see **[docs/environment.md](docs/environment.md)**. This document
+covers topology, images, and operations.
 
----
+## Stack
 
-## 1. Prerequisites
-
-Before starting, ensure you have the following installed:
-- [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/)
-- [Go 1.24+](https://go.dev/dl/) (for local backend development)
-- [Bun](https://bun.sh/) (for frontend development)
-- [Golang Migrate](https://github.com/golang-migrate/migrate) (optional, for manual migrations)
+| Component | Technology |
+| --- | --- |
+| API | Go 1.24, applies its own migrations on startup |
+| Database | PostgreSQL 16 (JSONB) |
+| Cache / rate limiting | Redis 7 |
+| Frontend | TanStack Start (Router + Vite + Nitro), React 19, Tailwind v4 |
+| PWA | Runtime-caching service worker + persisted TanStack Query cache |
+| Reverse proxy | Caddy 2 (automatic HTTPS) |
+| Package manager | Bun |
 
 ---
 
-## 2. Environment Configuration
+## 1. Topology
 
-BingeBeacon uses a **single master `.env` file** in the root directory for both the backend and frontend.
+```
+                       :80 / :443
+                            │
+                       ┌────▼────┐
+                       │  caddy  │   automatic HTTPS, single public surface
+                       └──┬───┬──┘
+              /api/*      │   │      /*
+                 ┌────────┘   └────────┐
+            ┌────▼────┐           ┌────▼────┐
+            │   api   │           │   web   │  TanStack Start on Bun, :3000
+            │  :8080  │           └─────────┘
+            └──┬───┬──┘
+      ┌────────┘   └────────┐
+ ┌────▼─────┐         ┌─────▼─────┐
+ │ postgres │         │   redis   │
+ └──────────┘         └───────────┘
+```
 
-1.  Create the root `.env` by copying the example:
-    ```bash
-    cp .env.example .env
-    ```
-2.  Create the frontend env symlink so Next.js reads the same `.env`:
-    ```bash
-    ln -s ../.env web/.env.local
-    ```
-3.  Edit the root `.env` and populate it with your keys. If any value contains spaces, wrap it in quotes (for example, `MOVIEGLU_AUTHORIZATION="Basic <base64>"`).
+Only Caddy publishes ports. `api`, `web`, `postgres`, and `redis` communicate
+over the compose network and are unreachable from outside the host — there is
+no exposed database. To reach the API directly while debugging, uncomment the
+`127.0.0.1:8080:8080` mapping in `docker-compose.yml`.
 
-### Root `.env` (Master)
+---
+
+## 2. Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) + Compose v2 (`docker compose`,
+  not the legacy `docker-compose`)
+- [Go 1.24+](https://go.dev/dl/) — local backend development only
+- [Bun](https://bun.sh/) — local frontend development only
+- [golang-migrate](https://github.com/golang-migrate/migrate) — optional; only
+  for creating or manually rolling back migrations
+
+---
+
+## 3. Configuration
+
+```bash
+make setup          # copies .env.example -> .env, creates secrets/, links web/.env.local
+```
+
+Then edit `.env`. The absolute minimum to boot with real content:
+
 ```env
-# --- Server ---
-SERVER_PORT=8080
-...
+DATABASE_PASSWORD=<openssl rand -base64 24>
+JWT_SECRET=<openssl rand -base64 48>
+SERVER_INTERNAL_API_KEY=<openssl rand -hex 32>
+TMDB_API_KEY=<TMDB v3 key>
+VITE_API_URL=/api/v1
 ```
 
-### Frontend Variables
-The Next.js app in `web/` will automatically pick up variables from the root `.env` (via the symlink `.env.local -> ../.env`). Only variables prefixed with `NEXT_PUBLIC_` will be exposed to the client.
+Two rules worth internalising:
+
+1. **`VITE_*` is build-time and public.** Vite inlines those values into the
+   JavaScript bundle. Changing one requires `docker compose build web`, not a
+   restart, and none of them may hold a secret.
+2. **Everything else is runtime.** Backend config is read on process start, so a
+   `docker compose up -d api` picks up `.env` changes.
+
+`docker-compose.yml` deliberately overrides four values regardless of `.env`,
+because they describe the container network rather than your deployment:
+`SERVER_ENVIRONMENT=production`, `DATABASE_HOST=postgres`,
+`REDIS_ADDR=redis:6379`, and `FCM_CREDENTIALS_FILE=/app/secrets/firebase-credentials.json`.
+
+### Firebase credentials
+
+Drop the service account JSON at `secrets/firebase-credentials.json`. Compose
+mounts the whole `./secrets` directory read-only at `/app/secrets`, so the stack
+still starts cleanly when the file is absent — the API logs
+`FCM initialization failed` and serves the in-app notification inbox without
+push. `secrets/` is gitignored.
 
 ---
 
-## 3. Firebase Setup (FCM)
+## 4. Development
 
-BingeBeacon uses Firebase Cloud Messaging (FCM) to deliver real-time alerts. You need to configure both the Admin SDK (for the Go backend) and the Client SDK (for the Next.js frontend).
+### Option A — native services, containerised dependencies (recommended)
 
-### 1. Create a Firebase Project
-1.  Go to the [Firebase Console](https://console.firebase.google.com/).
-2.  Create a new project named `BingeBeacon`.
-3.  Navigate to **Project Settings** (gear icon).
+```bash
+make docker-dev     # postgres + redis on 127.0.0.1 only
+make dev            # go run ./cmd/server  (applies migrations, then serves :8080)
+make web-dev        # cd web && bun dev    (:3000, HMR)
+```
 
-### 2. Backend Configuration (Go Admin SDK)
-1.  Go to the **Service accounts** tab.
-2.  Click **Generate new private key**.
-3.  Save the downloaded JSON file as `firebase-credentials.json` in the root of the project.
-4.  Ensure `FCM_CREDENTIALS_FILE=firebase-credentials.json` is set in your root `.env`.
+`VITE_API_URL=http://localhost:8080/api/v1` and
+`SERVER_CORS_ORIGINS=http://localhost:3000` for this mode.
 
-### 3. Frontend Configuration (Web SDK)
-1.  In **Project Settings > General**, click the **Web icon (`</>`)** to register a web app.
-2.  Copy the `firebaseConfig` object values into your root `.env` (prefixed with `NEXT_PUBLIC_FIREBASE_`).
-3.  Go to the **Cloud Messaging** tab.
-4.  Under **Web Push certificates**, click **Generate key pair**. This is your **VAPID Key**.
-5.  Add this key to `NEXT_PUBLIC_FIREBASE_VAPID_KEY` in your `.env`.
+### Option B — full stack in Docker
 
-### 4. Service Worker Activation
-The Firebase service worker (`web/public/firebase-messaging-sw.js`) is **automatically generated** during the build process (`npm run build` or `npm run dev`). 
+```bash
+make docker-prod
+```
 
-It pulls the configuration from your root `.env` file. You do not need to edit it manually. If you change your Firebase configuration, just restart the development server or rebuild the project.
+Service workers require HTTPS outside `localhost`, so test PWA installability
+either on `localhost` or against a real hostname with Caddy's TLS.
 
 ---
 
-## 4. Development Setup
-
-### Option A: Local (Recommended for speed)
-
-1. **Infrastructure**: Start PostgreSQL and Redis using Docker.
-   ```bash
-   docker-compose -f docker-compose.dev.yml up -d postgres redis
-   ```
-
-2. **Backend**:
-   ```bash
-   # Install dependencies
-   go mod download
-
-   # Run migrations (Dockerized migrate using compose)
-   docker-compose -f docker-compose.dev.yml up migrate
-
-   # Start server
-   go run ./cmd/server/main.go
-   ```
-
-3. **Frontend**:
-   ```bash
-   cd web
-   bun install
-   bun dev
-   ```
-   Access the frontend at `http://localhost:3000`.
-
-### Option B: Full Docker Development
+## 5. Production
 
 ```bash
-docker-compose -f docker-compose.dev.yml up --build
-```
-*Note: Service worker (Serwist) is disabled in development mode by default.*
-
----
-
-## 5. Production Setup
-
-### Using Docker Compose (Recommended)
-
-1. Ensure `.env` is fully populated with production secrets and TMDB keys.
-2. Build and start the services:
-   ```bash
-   docker-compose -f docker-compose.yml up -d --build
-   ```
-
-This will:
-- Start **PostgreSQL** (Port 5432)
-- Start **Redis** (Port 6379)
-- Build and start the **Go API** (Port 8080)
-- Build the **Next.js PWA** using a multi-stage Bun build and serve it (Port 3000)
-
-### Docker Compose File
-
-Use this `docker-compose.yml` (already in the repo root):
-```yaml
-services:
-  api:
-    build: .
-    restart: always
-    ports:
-      - "8080:8080"
-    env_file:
-      - .env
-    environment:
-      - SERVER_ENVIRONMENT=production
-    depends_on:
-      - postgres
-      - redis
-
-  postgres:
-    image: postgres:16-alpine
-    restart: always
-    environment:
-      POSTGRES_USER: ${DATABASE_USER:-postgres}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-password}
-      POSTGRES_DB: ${DATABASE_DBNAME:-bingebeacon}
-    ports:
-      - "5432:5432"
-    volumes:
-      - ./data/postgres:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    restart: always
-    ports:
-      - "6379:6379"
-    volumes:
-      - ./data/redis:/data
-
-  web:
-    build: ./web
-    restart: always
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    depends_on:
-      - api
+make docker-prod                    # docker compose up -d --build
+make health                         # {"status":"ok","db":"up","redis":"up",...}
+make docker-logs
 ```
 
-### Manual Production Build
+Startup ordering is enforced by health checks: Postgres and Redis must report
+healthy before `api` starts, and both `api` and `web` must report healthy before
+Caddy starts. Both application images ship their own `HEALTHCHECK`, so
+`docker compose ps` reflects real readiness rather than "process exists".
 
-**Backend (Dockerfile build)**:
+### Public hostname and HTTPS
+
+Point an A/AAAA record at the host, open 80 and 443, then:
+
+```env
+APP_ADDRESS=shows.example.com
+VITE_API_URL=/api/v1
+SERVER_CORS_ORIGINS=https://shows.example.com
+SERVER_INTERNAL_API_KEY=<long-random-secret>
+```
+
 ```bash
-# Build backend image
-docker build -t bingebeacon-api:latest -f Dockerfile .
-
-# Run backend container
-docker run --rm -p 8080:8080 --env-file .env bingebeacon-api:latest
+docker compose up -d --build
 ```
 
-**Frontend (Dockerfile build)**:
-```bash
-# Build frontend image
-docker build -t bingebeacon-web:latest -f web/Dockerfile ./web
+Caddy provisions and renews a Let's Encrypt certificate automatically; the
+certificates live in the `caddy_data` named volume, so don't prune it.
 
-# Run frontend container
-docker run --rm -p 3000:3000 --env-file .env bingebeacon-web:latest
+Keeping `VITE_API_URL=/api/v1` makes API calls same-origin: no CORS
+preflights, and the refresh-token cookie stays first-party. The PWA stores
+refresh tokens only in a Secure, HttpOnly cookie; mobile clients still receive
+them in the JSON response for platform secure storage.
+
+### Images
+
+| Image | Base | Size | Notes |
+| --- | --- | --- | --- |
+| `bingebeacon-api` | `alpine:3.21` | ~54 MB | Static `CGO_ENABLED=0` binary, `-trimpath -s -w`, runs as uid 10001, migrations bundled |
+| `bingebeacon-web` | `oven/bun:1.3-alpine` | ~106 MB | Only `.output` is copied into the runtime stage; no `node_modules`, runs as `bun` |
+
+Both use BuildKit cache mounts (`/go/pkg/mod`, Go build cache, Bun install
+cache), so incremental rebuilds are dominated by compilation, not downloads.
+
+### Building images individually
+
+```bash
+docker build -t bingebeacon-api:latest .
+docker run --rm -p 8080:8080 --env-file .env \
+  -v "$PWD/secrets:/app/secrets:ro" bingebeacon-api:latest
+
+docker build -t bingebeacon-web:latest \
+  --build-arg VITE_API_URL=/api/v1 \
+  --build-arg VITE_FIREBASE_API_KEY=... \
+  ./web
+docker run --rm -p 3000:3000 bingebeacon-web:latest
 ```
 
-**Manual (non-Docker) Production Build**:
+Note the `--build-arg` flags: `--env-file` at *run* time does nothing for the
+frontend, since Vite has already inlined those values.
+
+### Without Docker
+
 ```bash
-# Backend
-CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/bingebeacon ./cmd/server/main.go
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o bin/bingebeacon ./cmd/server
 ./bin/bingebeacon
 
-# Frontend
-cd web
-bun install
-bun run build # Uses --webpack internally for Serwist compatibility
-bun start
+cd web && bun install && bun run build && bun run start
 ```
 
 ---
 
 ## 6. Migrations
 
-Database migrations are located in `/migrations`.
-- **Up**:
-  ```bash
-  migrate -path ./migrations -database "postgres://$DATABASE_USER:$DATABASE_PASSWORD@$DATABASE_HOST:$DATABASE_PORT/$DATABASE_DBNAME?sslmode=$DATABASE_SSLMODE" up
-  ```
-- **Down**:
-  ```bash
-  migrate -path ./migrations -database "postgres://$DATABASE_USER:$DATABASE_PASSWORD@$DATABASE_HOST:$DATABASE_PORT/$DATABASE_DBNAME?sslmode=$DATABASE_SSLMODE" down
-  ```
-- **New Migration**:
-  ```bash
-  migrate create -ext sql -dir ./migrations -seq description_here
-  ```
+`cmd/server/main.go` runs everything in `migrations/` on startup and exits
+non-zero on failure, so a deploy needs no separate migration step. For manual
+control:
 
-If you use the dev compose file, you can also run migrations via Docker:
 ```bash
-docker-compose -f docker-compose.dev.yml up migrate
+make migrate-up
+make migrate-down          # rolls back exactly one step
+make migrate-create name=add_something
+```
+
+Or through Docker, without installing the CLI:
+
+```bash
+docker compose -f docker-compose.dev.yml --profile tools run --rm migrate up
+docker compose -f docker-compose.dev.yml --profile tools run --rm migrate down 1
+```
+
+If a migration fails halfway, `schema_migrations.dirty` is set and the API will
+refuse to start. Fix the SQL, then force the version:
+
+```bash
+migrate -path migrations -database "$DB_URL" force <last-good-version>
 ```
 
 ---
 
-## 7. Troubleshooting
+## 7. Backups
 
-### PWA Issues
-- Serwist only generates the service worker in **production build**.
-- If the service worker isn't registering, ensure you are using `HTTPS` (or `localhost`) as per PWA security requirements.
-- Clear browser cache and service worker registrations in DevTools (Application tab) if updates are not reflecting.
+The Postgres data directory is bind-mounted at `./data/postgres`.
 
-### TMDB API Errors
-- Ensure your `TMDB_API_KEY` is a "Read Access Token" (v4) or standard API Key (v3). BingeBeacon uses v3 keys by default.
+```bash
+docker compose exec -T postgres pg_dump -U postgres bingebeacon | gzip > backup-$(date +%F).sql.gz
+gunzip -c backup-2026-08-13.sql.gz | docker compose exec -T postgres psql -U postgres bingebeacon
+```
 
-### Firebase / Push Errors
-- Ensure the `firebase-credentials.json` is in the root directory if running via Docker (it is volume-mounted).
-- Browser notification permissions must be granted.
-- Ensure the `NEXT_PUBLIC_FIREBASE_VAPID_KEY` is the **Public Key** from the Firebase Cloud Messaging tab, not the private one.
-- If notifications aren't appearing in the background, double-check that `web/public/firebase-messaging-sw.js` has the correct project credentials.
+`make docker-nuke` tears down the stack *and* deletes `data/` — it is not the
+command you want in production.
+
+---
+
+## 8. Troubleshooting
+
+| Symptom | Cause and fix |
+| --- | --- |
+| `401 Invalid API key` from TMDB | You used the v4 Read Access Token (starts with `eyJ`). BingeBeacon needs the 32-char v3 key. |
+| Health shows `"tmdb":"configured"` but calls fail | The health endpoint only checks that a key is *present*, never that it is valid. Check the API logs. |
+| `DATABASE_PASSWORD must be set` on `up` | Prod compose requires a non-empty password. Set it in `.env`. |
+| Frontend calls `localhost:8080` in production | `VITE_API_URL` was baked in at build time. Set it to `/api/v1` and `docker compose build web`. |
+| CORS errors | Either add the origin to `SERVER_CORS_ORIGINS`, or better, serve same-origin with `VITE_API_URL=/api/v1`. |
+| `FCM initialization failed` in logs | Expected when `secrets/firebase-credentials.json` is missing. Push is disabled; everything else works. |
+| Service worker not registering | PWAs require HTTPS or `localhost`. Clear existing registrations in DevTools → Application. |
+| Background push never arrives | Verify `/sw.js` is registered and `VITE_FIREBASE_VAPID_KEY` is the **public** Web Push key. |
+| Caddy cannot get a certificate | `APP_ADDRESS` must be a real hostname resolving to this host, with 80/443 reachable from the internet. |
+| Stale frontend after a rebuild | The service worker serves the old shell. Hard-reload or unregister it. |
