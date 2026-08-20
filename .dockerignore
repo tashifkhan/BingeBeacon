@@ -1,0 +1,25 @@
+# Backend build context — keep it to Go sources + migrations.
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+secrets/
+data/
+main
+bingebeacon
+bin/
+firebase-credentials.json
+*.log
+
+# The frontend has its own build context (./web)
+web/
+
+# Docs / infra that never affect the Go build
+docs/
+deployment.md
+README.md
+Caddyfile
+docker-compose*.yml
+Dockerfile
+.dockerignore
