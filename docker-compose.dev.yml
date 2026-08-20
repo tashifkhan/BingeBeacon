@@ -1,38 +1,70 @@
+# ---------------------------------------------------------------
+# BingeBeacon — development dependencies
+#
+# Runs only the stateful backing services on localhost so you can run the Go
+# API (`go run ./cmd/server`) and the PWA (`cd web && bun dev`) natively with
+# hot reload.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#
+# The API applies migrations itself on startup; the `migrate` service below is
+# only for running them manually (it lives behind a profile so it does not run
+# as part of a plain `up`):
+#
+#   docker compose -f docker-compose.dev.yml --profile tools run --rm migrate up
+#   docker compose -f docker-compose.dev.yml --profile tools run --rm migrate down 1
+# ---------------------------------------------------------------
+
+name: bingebeacon-dev
+
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: bingebeacon
+      POSTGRES_USER: ${DATABASE_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-password}
+      POSTGRES_DB: ${DATABASE_DBNAME:-bingebeacon}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${DATABASE_PORT:-5432}:5432"
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d bingebeacon"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DATABASE_USER:-postgres} -d ${DATABASE_DBNAME:-bingebeacon}",
+        ]
       interval: 5s
       timeout: 3s
       retries: 10
 
   redis:
-    image: redis:7
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - ./data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   migrate:
     image: migrate/migrate:latest
+    profiles: ["tools"]
     volumes:
       - ./migrations:/migrations:ro
     depends_on:
       postgres:
         condition: service_healthy
-    entrypoint: ["migrate"]
-    command:
-      - "-path"
-      - "/migrations"
-      - "-database"
-      - "postgres://postgres:password@postgres:5432/bingebeacon?sslmode=disable"
-      - "up"
+    entrypoint:
+      - migrate
+      - -path
+      - /migrations
+      - -database
+      - postgres://${DATABASE_USER:-postgres}:${DATABASE_PASSWORD:-password}@postgres:5432/${DATABASE_DBNAME:-bingebeacon}?sslmode=disable
+    command: ["up"]
