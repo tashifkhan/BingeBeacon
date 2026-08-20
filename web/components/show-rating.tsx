@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
+import { StarIcon } from "@/lib/icons";
 import type { ShowRatings } from "@/types";
-import { Star } from "lucide-react";
 
 interface ShowRatingProps {
   ratings: ShowRatings | null;
@@ -11,27 +11,19 @@ interface ShowRatingProps {
 const RATING_CONFIGS: {
   key: string;
   label: string;
-  icon: string;
+  glyph: string;
   color: string;
+  suffix?: string;
 }[] = [
-  {
-    key: "imdb_rating",
-    label: "IMDb",
-    icon: "★",
-    color: "text-amber-400",
-  },
+  { key: "imdb_rating", label: "IMDb", glyph: "★", color: "text-amber-400" },
   {
     key: "rotten_tomatoes",
     label: "RT",
-    icon: "🍅",
+    glyph: "🍅",
     color: "text-red-400",
+    suffix: "%",
   },
-  {
-    key: "metascore",
-    label: "Meta",
-    icon: "M",
-    color: "text-green-400",
-  },
+  { key: "metascore", label: "Meta", glyph: "M", color: "text-green-400" },
 ];
 
 export function ShowRating({ ratings, className, compact = false }: ShowRatingProps) {
@@ -40,36 +32,35 @@ export function ShowRating({ ratings, className, compact = false }: ShowRatingPr
   const available = RATING_CONFIGS.filter(
     (r) => ratings[r.key] && ratings[r.key] !== "N/A"
   );
-
   if (available.length === 0) return null;
 
   return (
-    <div className={cn("flex items-center gap-3", className)}>
-      {available.map(({ key, label, icon, color }) => (
+    <div className={cn("flex flex-wrap items-center gap-2", className)}>
+      {available.map(({ key, label, glyph, color, suffix }) => (
         <div
           key={key}
           className={cn(
-            "flex items-center gap-1.5",
-            compact && "gap-1"
+            "flex items-center gap-2 rounded-lg border border-border/50 bg-card/60 px-2.5 py-1.5",
+            compact && "gap-1.5 px-2 py-1"
           )}
         >
-          <span className={cn("text-sm", color, compact && "text-xs")}>
-            {icon}
+          <span className={cn("text-sm leading-none", color, compact && "text-xs")}>
+            {glyph}
           </span>
-          <div className="flex flex-col">
+          <div className="flex flex-col leading-none">
             {!compact && (
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
                 {label}
               </span>
             )}
             <span
               className={cn(
                 "font-semibold tabular-nums",
-                compact ? "text-xs" : "text-sm"
+                compact ? "text-xs" : "mt-0.5 text-sm"
               )}
             >
               {ratings[key]}
-              {key === "rotten_tomatoes" && "%"}
+              {suffix}
             </span>
           </div>
         </div>
@@ -78,7 +69,7 @@ export function ShowRating({ ratings, className, compact = false }: ShowRatingPr
   );
 }
 
-/** Inline single-rating display for cards */
+/** Inline single-rating display for cards. */
 export function InlineRating({
   rating,
   className,
@@ -89,7 +80,7 @@ export function InlineRating({
   if (!rating || rating === "N/A") return null;
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+      <StarIcon weight="Filled" className="size-3 text-amber-400" />
       <span className="text-xs font-medium tabular-nums">{rating}</span>
     </div>
   );

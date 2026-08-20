@@ -31,7 +31,7 @@ export interface PaginatedResponse<T> {
 
 export interface TokenPair {
   access_token: string;
-  refresh_token: string;
+	refresh_token?: string;
   expires_in: number;
 }
 
@@ -56,15 +56,14 @@ export interface LogoutRequest {
 
 // ---------- User ----------
 
-/** Backend `UserDevice` has no JSON tags → PascalCase field names. */
 export interface UserDevice {
-  ID: string;
-  UserID: string;
-  DeviceToken: string;
-  Platform: string;
-  IsActive: boolean;
-  CreatedAt: string;
-  UpdatedAt: string;
+	id: string;
+	user_id: string;
+	device_token: string;
+	platform: string;
+	is_active: boolean;
+	created_at: string;
+	updated_at: string;
 }
 
 export interface UserProfile {
@@ -153,15 +152,14 @@ export interface Show {
 }
 
 export interface ShowSearchResult {
-  id: string;
+	/** Present when the title already exists in the local catalog. */
+	id?: string;
+	tmdb_id: number;
   title: string;
   media_type: string;
-  poster_url: string | null;
-  overview: string | null;
-  premiere_date: string | null;
-  genres: string[] | null;
-  // May include additional fields from TMDB search
-  [key: string]: unknown;
+	poster_url: string;
+	overview: string;
+	year: string;
 }
 
 export interface SyncStatus {
@@ -192,6 +190,7 @@ export interface TrackedShowResponse {
 export interface TrackShowRequest {
   show_id?: string;
   tmdb_id?: number;
+	media_type?: "tv" | "movie";
   is_favorite?: boolean;
   notify_new_episode?: boolean;
   notify_new_season?: boolean;
@@ -292,8 +291,7 @@ export interface WatchHistoryEntry {
   watched_at: string;
   rating?: number; // 1-10
   notes?: string;
-  show_title?: string; // Joined field
-  show_poster_url?: string; // Joined field
+	show?: Show;
 }
 
 export interface CreateHistoryEntryRequest {
@@ -312,18 +310,15 @@ export interface UpdateHistoryEntryRequest {
 }
 
 export interface HistoryStats {
-  total_episodes_watched: number;
-  total_time_minutes: number;
-  distinct_shows_watched: number;
-  this_month_count: number;
+	total_episodes: number;
+	total_shows: number;
 }
 
 export interface ShowProgress {
-  show_id: string;
-  completed_episodes: number;
+	 watched_episodes: number;
   total_episodes: number;
-  percentage: number;
-  last_watched_at: string;
+	percent_complete: number;
+	next_episode?: { season_number: number; episode_number: number };
 }
 
 // ---------- Showtimes (MovieGlu) ----------

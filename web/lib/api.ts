@@ -1,15 +1,17 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
-import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./auth";
+import { getAccessToken, setAccessToken, clearTokens } from "./auth";
 import type { ApiResponse, TokenPair, ApiError } from "@/types";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api/v1";
+  import.meta.env.VITE_API_URL ?? "http://localhost:8080/api/v1";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15_000,
+	withCredentials: true,
   headers: {
     "Content-Type": "application/json",
+	"X-Client-Platform": "web",
   },
 });
 
@@ -46,13 +48,11 @@ api.interceptors.response.use(
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     // Only attempt refresh on 401 and if we haven't already retried
-    if (error.response?.status !== 401 || originalRequest._retry) {
-      return Promise.reject(error);
-    }
-
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) {
-      clearTokens();
+	if (
+		error.response?.status !== 401 ||
+		originalRequest._retry ||
+		originalRequest.url?.includes("/auth/")
+	) {
       return Promise.reject(error);
     }
 
@@ -68,13 +68,14 @@ api.interceptors.response.use(
 
     try {
       // Use a raw axios call to avoid triggering interceptors
-      const { data } = await axios.post<ApiResponse<TokenPair>>(
-        `${API_BASE_URL}/auth/refresh`,
-        { refresh_token: refreshToken }
-      );
+	  const { data } = await axios.post<ApiResponse<TokenPair>>(
+		`${API_BASE_URL}/auth/refresh`,
+		{},
+		{ withCredentials: true, headers: { "X-Client-Platform": "web" } }
+	  );
 
-      const tokens = data.data;
-      setTokens(tokens.access_token, tokens.refresh_token);
+	  const tokens = data.data;
+	  setAccessToken(tokens.access_token);
 
       processQueue(null, tokens.access_token);
 

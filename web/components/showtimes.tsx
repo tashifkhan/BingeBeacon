@@ -1,11 +1,10 @@
-"use client";
-
 import { useState } from "react";
+import { format } from "date-fns";
 import { useShowtimes } from "@/hooks/useShowtimes";
 import { Button } from "@/components/ui/button";
-import { Loader2, MapPin } from "lucide-react";
-import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { Loader } from "@/components/motion/loader";
+import { LocationIcon, ShowtimeIcon } from "@/lib/icons";
 
 interface ShowtimesProps {
   showId: string;
@@ -13,109 +12,111 @@ interface ShowtimesProps {
 }
 
 export function Showtimes({ showId, mediaType }: ShowtimesProps) {
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [permissionDenied, setPermissionDenied] = useState(false);
-  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-
-  // Default to today
-  const today = format(new Date(), "yyyy-MM-dd");
-
-  const { data: showtimes, isLoading: isLoadingShowtimes, error } = useShowtimes(
-    showId,
-    location?.lat,
-    location?.lng,
-    today
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
+    null
   );
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
 
-  const requestLocation = () => {
-    setIsLoadingLocation(true);
+  const today = format(new Date(), "yyyy-MM-dd");
+  const {
+    data: showtimes,
+    isLoading: isLoadingShowtimes,
+    error,
+  } = useShowtimes(showId, location?.lat, location?.lng, today);
+
+  function requestLocation() {
     if (!navigator.geolocation) {
       setPermissionDenied(true);
-      setIsLoadingLocation(false);
       return;
     }
-
+    setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         });
-        setIsLoadingLocation(false);
+        setIsLocating(false);
       },
       () => {
         setPermissionDenied(true);
-        setIsLoadingLocation(false);
+        setIsLocating(false);
       }
     );
-  };
-
-  if (mediaType !== "movie") {
-    return null;
   }
 
-  // Helper to extract cinemas from the nested structure
-  const cinemas = showtimes?.films.flatMap(f => f.showtimes) || [];
+  if (mediaType !== "movie") return null;
+
+  const cinemas = showtimes?.films.flatMap((f) => f.showtimes) ?? [];
 
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <h3 className="mb-4 text-lg font-semibold flex items-center gap-2">
-        <MapPin className="h-5 w-5 text-primary" />
-        Showtimes Nearby
+    <section className="rounded-xl border border-border/50 bg-card p-4">
+      <h3 className="mb-4 flex items-center gap-2 font-display text-base font-semibold">
+        <ShowtimeIcon weight="Filled" className="size-4 text-primary" />
+        Showtimes nearby
       </h3>
 
       {!location ? (
-        <div className="flex flex-col items-center justify-center space-y-4 py-8 text-center">
+        <div className="flex flex-col items-center gap-3 py-4 text-center">
           <p className="text-sm text-muted-foreground">
-            See showtimes for cinemas near you.
+            See screenings at cinemas near you.
           </p>
           {permissionDenied ? (
             <p className="text-sm text-destructive">
-              Location access denied. Please enable location services to see showtimes.
+              Location access was denied. Enable location services to see
+              showtimes.
             </p>
           ) : (
-            <Button onClick={requestLocation} disabled={isLoadingLocation}>
-              {isLoadingLocation ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Button
+              onClick={requestLocation}
+              disabled={isLocating}
+              className="h-11 w-full rounded-xl press"
+            >
+              {isLocating ? (
+                <Loader variant="spinner" size={16} className="mr-2" />
               ) : (
-                <MapPin className="mr-2 h-4 w-4" />
+                <LocationIcon className="mr-2 size-4" />
               )}
-              Use My Location
+              Use my location
             </Button>
           )}
         </div>
-      ) : (
-        <div className="space-y-6">
-          {isLoadingShowtimes ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : error ? (
-             <div className="text-center text-sm text-destructive py-4">
-              Unable to load showtimes.
-            </div>
-          ) : cinemas.length === 0 ? (
-            <div className="text-center text-sm text-muted-foreground py-4">
-              No showtimes found nearby for today.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {cinemas.map((cinema, idx) => (
-                <div key={`${cinema.cinema_id}-${idx}`} className="rounded-md border p-3">
-                  <h4 className="font-medium mb-2">{cinema.cinema_name}</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {cinema.times.map((time, tIdx) => (
-                      <Badge key={tIdx} variant="outline">
-                        {time}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      ) : isLoadingShowtimes ? (
+        <div className="flex justify-center py-6">
+          <Loader variant="dots" size={20} label="Finding showtimes" />
         </div>
+      ) : error ? (
+        <p className="py-3 text-center text-sm text-destructive">
+          Unable to load showtimes.
+        </p>
+      ) : cinemas.length === 0 ? (
+        <p className="py-3 text-center text-sm text-muted-foreground">
+          No showtimes found nearby for today.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {cinemas.map((cinema, idx) => (
+            <li
+              key={`${cinema.cinema_id}-${idx}`}
+              className="rounded-lg border border-border/50 p-3"
+            >
+              <h4 className="mb-2 text-sm font-medium">{cinema.cinema_name}</h4>
+              <div className="flex flex-wrap gap-1.5">
+                {cinema.times.map((time, tIdx) => (
+                  <Badge
+                    key={tIdx}
+                    variant="outline"
+                    className="tabular-nums"
+                  >
+                    {time}
+                  </Badge>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
-    </div>
+    </section>
   );
 }

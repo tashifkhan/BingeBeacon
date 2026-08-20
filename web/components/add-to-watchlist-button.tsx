@@ -1,9 +1,12 @@
-"use client";
-
-import { useState } from "react";
-import { useWatchlist, useAddToWatchlist, useRemoveFromWatchlist, useUpdateWatchlistItem } from "@/hooks/useWatchlist";
+import {
+  useWatchlist,
+  useAddToWatchlist,
+  useRemoveFromWatchlist,
+  useUpdateWatchlistItem,
+} from "@/hooks/useWatchlist";
 import { Button } from "@/components/ui/button";
-import { Bookmark, Check, Loader2, MoreHorizontal } from "lucide-react";
+import { Loader } from "@/components/motion/loader";
+import { CheckIcon, MoreIcon, WatchlistIcon } from "@/lib/icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,84 +19,103 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
+type Priority = "low" | "medium" | "high";
+
 interface AddToWatchlistButtonProps {
   showId: string;
   variant?: "default" | "outline" | "secondary" | "ghost" | "link";
-  size?: "default" | "sm" | "lg" | "icon";
   className?: string;
 }
 
-export function AddToWatchlistButton({ showId, variant = "outline", size = "default", className }: AddToWatchlistButtonProps) {
-  const { data: watchlist, isLoading: isLoadingWatchlist } = useWatchlist(1, 100); // Fetch enough to likely find it
+export function AddToWatchlistButton({
+  showId,
+  variant = "outline",
+  className,
+}: AddToWatchlistButtonProps) {
+  const { data: watchlist, isLoading: isLoadingWatchlist } = useWatchlist(1, 100);
   const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
   const updateWatchlist = useUpdateWatchlistItem();
 
-  const watchlistItem = watchlist?.data.find((item) => item.show_id === showId);
-  const isInWatchlist = !!watchlistItem;
-  const isLoading = isLoadingWatchlist || addToWatchlist.isPending || removeFromWatchlist.isPending || updateWatchlist.isPending;
+  const watchlistItem = watchlist?.find((item) => item.show_id === showId);
+  const isMutating =
+    addToWatchlist.isPending ||
+    removeFromWatchlist.isPending ||
+    updateWatchlist.isPending;
 
-  const handleToggle = () => {
-    if (isInWatchlist) {
-      removeFromWatchlist.mutate(watchlistItem.id);
-    } else {
-      addToWatchlist.mutate({ show_id: showId, priority: "medium" });
-    }
-  };
-
-  const handlePriorityChange = (priority: "low" | "medium" | "high") => {
-    if (watchlistItem) {
-      updateWatchlist.mutate({ id: watchlistItem.id, data: { priority } });
-    }
-  };
+  const baseClass = "h-11 w-full rounded-xl press sm:w-auto sm:min-w-40";
 
   if (isLoadingWatchlist) {
     return (
-      <Button variant={variant} size={size} disabled className={className}>
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        Loading...
+      <Button variant={variant} disabled className={cn(baseClass, className)}>
+        <Loader variant="spinner" size={16} className="mr-2" />
+        Loading…
       </Button>
     );
   }
 
-  if (isInWatchlist) {
+  function handleToggle() {
+    if (watchlistItem) {
+      removeFromWatchlist.mutate(watchlistItem.show_id);
+    } else {
+      addToWatchlist.mutate({ show_id: showId, priority: "medium" });
+    }
+  }
+
+  if (watchlistItem) {
     return (
-      <div className="flex items-center gap-1">
+      <div className={cn("flex w-full items-center gap-2 sm:w-auto", className)}>
         <Button
           variant={variant}
-          size={size}
           onClick={handleToggle}
-          className={cn("bg-primary/10 text-primary hover:bg-destructive/10 hover:text-destructive", className)}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Check className="mr-2 h-4 w-4" />
+          disabled={isMutating}
+          className={cn(
+            baseClass,
+            "flex-1 bg-primary/10 text-primary can-hover:hover:bg-destructive/10 can-hover:hover:text-destructive"
           )}
-          In Watchlist
+        >
+          {isMutating ? (
+            <Loader variant="spinner" size={16} className="mr-2" />
+          ) : (
+            <CheckIcon className="mr-2 size-4" />
+          )}
+          In watchlist
         </Button>
-        
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9">
-              <MoreHorizontal className="h-4 w-4" />
-              <span className="sr-only">Open menu</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-11 shrink-0 rounded-xl"
+            >
+              <MoreIcon className="size-4" />
+              <span className="sr-only">Watchlist options</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="min-w-48">
             <DropdownMenuLabel>Priority</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={watchlistItem.priority} onValueChange={(v) => handlePriorityChange(v as any)}>
+            <DropdownMenuRadioGroup
+              value={watchlistItem.priority}
+              onValueChange={(value) => {
+                if (value === "low" || value === "medium" || value === "high") {
+                  updateWatchlist.mutate({
+                    id: watchlistItem.show_id,
+                    data: { priority: value as Priority },
+                  });
+                }
+              }}
+            >
               <DropdownMenuRadioItem value="high">High</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="medium">Medium</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="low">Low</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem 
+            <DropdownMenuItem
               className="text-destructive focus:text-destructive"
               onClick={handleToggle}
             >
-              Remove from Watchlist
+              Remove from watchlist
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -104,17 +126,16 @@ export function AddToWatchlistButton({ showId, variant = "outline", size = "defa
   return (
     <Button
       variant={variant}
-      size={size}
       onClick={handleToggle}
-      className={className}
-      disabled={isLoading}
+      disabled={isMutating}
+      className={cn(baseClass, className)}
     >
-      {isLoading ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      {isMutating ? (
+        <Loader variant="spinner" size={16} className="mr-2" />
       ) : (
-        <Bookmark className="mr-2 h-4 w-4" />
+        <WatchlistIcon className="mr-2 size-4" />
       )}
-      Add to Watchlist
+      Add to watchlist
     </Button>
   );
 }

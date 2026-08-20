@@ -45,6 +45,11 @@ function makeQueryClient(): QueryClient {
             "tracking",
             "show-detail",
             "notifications-count",
+			"notifications",
+			"watchlist",
+			"history",
+			"shows-trending",
+			"shows-popular",
           ];
           const key = query.queryKey[0];
           return (
@@ -65,7 +70,11 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
+      {/* Dev only: this was shipping to production, and its floating button
+          sat directly on top of the Home tab in the mobile nav. */}
+      {import.meta.env.DEV && (
+        <ReactQueryDevtools initialIsOpen={false} buttonPosition="top-right" />
+      )}
     </QueryClientProvider>
   );
 }
