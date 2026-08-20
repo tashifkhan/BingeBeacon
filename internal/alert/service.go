@@ -14,6 +14,7 @@ import (
 
 type ShowSyncer interface {
 	SyncShow(ctx context.Context, showID uuid.UUID) error
+	QueueShowNotifications(ctx context.Context, userID, showID uuid.UUID) error
 }
 
 type Service struct {
@@ -69,6 +70,9 @@ type TrackedShowResponse struct {
 }
 
 func (s *Service) TrackShow(ctx context.Context, userID uuid.UUID, req TrackRequest) error {
+	if req.NotifyHoursBefore != nil && (*req.NotifyHoursBefore < 0 || *req.NotifyHoursBefore > 168) {
+		return errors.New("notify_hours_before must be between 0 and 168")
+	}
 	var showID uuid.UUID
 
 	if req.ShowID != nil {
@@ -106,12 +110,15 @@ func (s *Service) TrackShow(ctx context.Context, userID uuid.UUID, req TrackRequ
 	if err := s.repo.Create(track); err != nil {
 		return err
 	}
+	_ = s.showRepo.BumpSyncPriority(showID)
 
 	// Trigger Sync asynchronously to not block response
 	go func() {
 		// Create a new context for background work
 		bgCtx := context.Background()
-		s.syncer.SyncShow(bgCtx, showID)
+		if err := s.syncer.SyncShow(bgCtx, showID); err == nil {
+			_ = s.syncer.QueueShowNotifications(bgCtx, userID, showID)
+		}
 	}()
 
 	// Invalidate timeline cache for this user
@@ -129,6 +136,9 @@ func (s *Service) UntrackShow(ctx context.Context, userID, showID uuid.UUID) err
 }
 
 func (s *Service) UpdateTracking(ctx context.Context, userID, showID uuid.UUID, req UpdateTrackRequest) error {
+	if req.NotifyHoursBefore != nil && (*req.NotifyHoursBefore < 0 || *req.NotifyHoursBefore > 168) {
+		return errors.New("notify_hours_before must be between 0 and 168")
+	}
 	track, err := s.repo.FindByUserAndShow(userID, showID)
 	if err != nil {
 		return errors.New("tracked show not found")
