@@ -2,11 +2,15 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -238,13 +242,21 @@ func NewServer(cfg *config.Config) (*Server, error) {
 			redisStatus = "down"
 		}
 		httputil.JSON(w, http.StatusOK, map[string]string{
-			"status": "ok",
-			"db":     dbStatus,
-			"redis":  redisStatus,
+			"status":  "ok",
+			"db":      dbStatus,
+			"redis":   redisStatus,
+			"tmdb":    configuredStatus(cfg.TMDB.APIKey),
+			"omdb":    configuredStatus(cfg.OMDB.APIKey),
+			"thetvdb": configuredStatus(cfg.TheTVDB.APIKey),
+			"fcm":     configuredStatus(cfg.FCM.CredentialsFile),
 		})
 	}).Methods("GET")
 
 	internalRouter.HandleFunc("/sync/trigger", func(w http.ResponseWriter, r *http.Request) {
+		if !authorizeInternal(r, cfg) {
+			httputil.Error(w, http.StatusUnauthorized, "internal API key required")
+			return
+		}
 		// Manual sync trigger
 		// Expects query param show_id
 		showIDStr := r.URL.Query().Get("show_id")
@@ -267,11 +279,25 @@ func NewServer(cfg *config.Config) (*Server, error) {
 		httputil.JSON(w, http.StatusOK, map[string]string{"message": "Sync triggered successfully"})
 	}).Methods("POST")
 
+	internalRouter.HandleFunc("/sync/status", func(w http.ResponseWriter, r *http.Request) {
+		if !authorizeInternal(r, cfg) {
+			httputil.Error(w, http.StatusUnauthorized, "internal API key required")
+			return
+		}
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		entries, err := syncer.RecentLogs(limit)
+		if err != nil {
+			httputil.Error(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		httputil.JSON(w, http.StatusOK, entries)
+	}).Methods("GET")
+
 	// 7. CORS
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"}, // Customize for production
+		AllowedOrigins:   splitCSV(cfg.Server.CORSOrigins),
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-Client-Platform"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-Client-Platform", "X-Internal-API-Key"},
 		AllowCredentials: true,
 	})
 
@@ -285,8 +311,12 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	}
 
 	srv.httpServer = &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: c.Handler(r),
+		Addr:              fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler:           c.Handler(r),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
 	}
 
 	return srv, nil
@@ -298,17 +328,22 @@ func (s *Server) Start() error {
 	// Start Scheduler
 	s.scheduler.Start()
 
+	serverErrors := make(chan error, 1)
 	go func() {
-		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			s.logger.Error("Server failed", "error", err)
-			os.Exit(1)
-		}
+		serverErrors <- s.httpServer.ListenAndServe()
 	}()
 
 	// Graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt)
-	<-quit
+	shutdownCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	select {
+	case err := <-serverErrors:
+		if err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("HTTP server failed: %w", err)
+		}
+		return nil
+	case <-shutdownCtx.Done():
+	}
 
 	s.logger.Info("Server shutting down...")
 
@@ -322,4 +357,31 @@ func (s *Server) Start() error {
 	}
 
 	return nil
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if origin := strings.TrimSpace(part); origin != "" {
+			result = append(result, origin)
+		}
+	}
+	return result
+}
+
+func authorizeInternal(r *http.Request, cfg *config.Config) bool {
+	if cfg.Server.InternalAPIKey == "" {
+		return cfg.Server.Environment != "production"
+	}
+	provided := r.Header.Get("X-Internal-API-Key")
+	return len(provided) == len(cfg.Server.InternalAPIKey) &&
+		subtle.ConstantTimeCompare([]byte(provided), []byte(cfg.Server.InternalAPIKey)) == 1
+}
+
+func configuredStatus(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "not_configured"
+	}
+	return "configured"
 }
