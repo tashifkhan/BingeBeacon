@@ -1,121 +1,246 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import {
-  Home,
-  Search,
-  CalendarDays,
-  Tv,
-  Bell,
-  Bookmark,
-  History,
-} from "lucide-react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { SPRING_LAYOUT } from "@/lib/ease";
+import {
+  AlertsIcon,
+  HomeIcon,
+  MoreTabIcon,
+  SearchIcon,
+  TrackingIcon,
+  WatchlistIcon,
+  type IconComponent,
+} from "@/lib/icons";
 import { useUnreadCount } from "@/hooks/use-notifications";
 import { useAuth } from "@/providers/auth-provider";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/shows/search", label: "Search", icon: Search },
-  { href: "/watchlist", label: "Watchlist", icon: Bookmark },
-  { href: "/history", label: "History", icon: History },
-  { href: "/tracking", label: "Tracking", icon: Tv },
-  { href: "/notifications", label: "Alerts", icon: Bell },
-] as const;
+type NavItem = {
+  href: string;
+  label: string;
+  icon: IconComponent;
+  /** Reachable without an account. */
+  public?: boolean;
+};
+
+// Five destinations plus a "More" hub. History, Timeline, and settings
+// (appearance, push, account) live inside More rather than the bar: a phone
+// tab bar stops being tappable past six items, and those are secondary
+// destinations rather than daily ones.
+const NAV_ITEMS: NavItem[] = [
+  { href: "/", label: "Home", icon: HomeIcon, public: true },
+  { href: "/shows/search", label: "Search", icon: SearchIcon, public: true },
+  { href: "/watchlist", label: "Watchlist", icon: WatchlistIcon },
+  { href: "/tracking", label: "Tracking", icon: TrackingIcon },
+  { href: "/notifications", label: "Alerts", icon: AlertsIcon },
+  { href: "/more", label: "More", icon: MoreTabIcon, public: true },
+];
+
+function useActiveHref() {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  return (href: string) =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
 
 export function NavBar() {
-  const pathname = usePathname();
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const isActive = useActiveHref();
   const { isAuthenticated } = useAuth();
   const { data: unread } = useUnreadCount();
   const unreadCount = unread?.count ?? 0;
 
-  // Don't show nav on auth pages
+  // Auth screens are full-bleed; the app chrome would only get in the way.
+  // Theme lives on the auth form itself (and on More once signed in) rather
+  // than as a floating overlay that collides with the page header.
   if (pathname.startsWith("/login") || pathname.startsWith("/register")) {
     return null;
   }
 
+  const resolve = (item: NavItem) =>
+    isAuthenticated || item.public ? item.href : "/login";
+
   return (
     <>
-      {/* Desktop side nav */}
-      <nav className="fixed left-0 top-0 z-50 hidden h-full w-18 flex-col items-center gap-1 border-r border-border bg-card/80 py-6 backdrop-blur-xl md:flex">
-        {/* Logo mark */}
-        <Link
-          href="/"
-          className="mb-8 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10"
-        >
-          <div className="h-3 w-3 rounded-full bg-primary glow-amber animate-beacon-pulse" />
-        </Link>
+      <DesktopRail
+        items={NAV_ITEMS}
+        isActive={isActive}
+        resolve={resolve}
+        unreadCount={unreadCount}
+      />
+      <MobileBar
+        items={NAV_ITEMS}
+        isActive={isActive}
+        resolve={resolve}
+        unreadCount={unreadCount}
+      />
+    </>
+  );
+}
 
-        <div className="flex flex-1 flex-col items-center gap-1">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const isActive =
-              href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(href);
+// ---------- Phone: bottom tab bar ----------
+function MobileBar({
+  items,
+  isActive,
+  resolve,
+  unreadCount,
+}: {
+  items: NavItem[];
+  isActive: (href: string) => boolean;
+  resolve: (item: NavItem) => string;
+  unreadCount: number;
+}) {
+  const reduce = useReducedMotion();
 
-            return (
+  return (
+    <nav
+      aria-label="Primary"
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-50 md:hidden",
+        "border-t border-border/80 bg-card/85 backdrop-blur-xl",
+        // The bar itself is a fixed height; the inset is padding below it so
+        // the tap targets stay clear of the home indicator.
+        "pb-safe"
+      )}
+    >
+      <ul className="flex h-nav-bar items-stretch justify-around px-1">
+        {items.map((item) => {
+          const active = isActive(item.href);
+          const Icon = item.icon;
+          const showBadge = item.label === "Alerts" && unreadCount > 0;
+
+          return (
+            <li key={item.href} className="flex-1">
               <Link
-                key={href}
-                href={isAuthenticated || href === "/shows/search" ? href : "/login"}
+                to={resolve(item)}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "group relative flex h-12 w-12 items-center justify-center rounded-xl transition-all duration-200",
-                  isActive
-                    ? "bg-primary/15 text-primary"
+                  "relative flex h-full w-full touch-target flex-col items-center justify-center gap-1 press",
+                  active ? "text-primary" : "text-muted-foreground"
+                )}
+              >
+                {/* Active pill glides between tabs rather than blinking. */}
+                {active && (
+                  <motion.span
+                    layoutId="mobile-nav-active"
+                    transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
+                    className="absolute inset-x-2 top-0 h-0.5 rounded-full bg-primary"
+                  />
+                )}
+                <span className="relative">
+                  <Icon
+                    className="size-5.5"
+                    weight={active ? "Filled" : "Outline"}
+                  />
+                  {showBadge && <UnreadDot count={unreadCount} />}
+                </span>
+                <span
+                  className={cn(
+                    "text-[10px] leading-none",
+                    active ? "font-semibold" : "font-medium"
+                  )}
+                >
+                  {item.label}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+// ---------- Tablet & desktop: left rail ----------
+function DesktopRail({
+  items,
+  isActive,
+  resolve,
+  unreadCount,
+}: {
+  items: NavItem[];
+  isActive: (href: string) => boolean;
+  resolve: (item: NavItem) => string;
+  unreadCount: number;
+}) {
+  const reduce = useReducedMotion();
+
+  return (
+    <nav
+      aria-label="Primary"
+      className="fixed inset-y-0 left-0 z-50 hidden w-nav-rail flex-col items-center border-r border-border/80 bg-card/80 py-6 backdrop-blur-xl md:flex"
+    >
+      <Link
+        to="/"
+        aria-label="BingeBeacon home"
+        className="mb-8 flex size-10 items-center justify-center rounded-xl bg-primary/10"
+      >
+        <span className="size-3 animate-beacon-pulse rounded-full bg-primary glow-amber" />
+      </Link>
+
+      <ul className="flex flex-1 flex-col items-center gap-1">
+        {items.map((item) => {
+          const active = isActive(item.href);
+          const Icon = item.icon;
+          const showBadge = item.label === "Alerts" && unreadCount > 0;
+
+          return (
+            <li key={item.href}>
+              <Link
+                to={resolve(item)}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "group relative flex size-12 items-center justify-center rounded-xl transition-colors duration-200",
+                  active
+                    ? "text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
-                <Icon className="h-5 w-5" strokeWidth={isActive ? 2.2 : 1.8} />
-                {/* Unread badge on bell */}
-                {label === "Alerts" && unreadCount > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
+                {active && (
+                  <motion.span
+                    layoutId="rail-nav-active"
+                    transition={reduce ? { duration: 0 } : SPRING_LAYOUT}
+                    className="absolute inset-0 rounded-xl bg-primary/15"
+                  />
                 )}
-                {/* Tooltip */}
-                <span className="pointer-events-none absolute left-full ml-3 whitespace-nowrap rounded-md bg-popover px-2.5 py-1 text-xs font-medium text-popover-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100">
-                  {label}
+                <span className="relative">
+                  <Icon
+                    className="size-5"
+                    weight={active ? "Filled" : "Outline"}
+                  />
+                  {showBadge && <UnreadDot count={unreadCount} />}
+                </span>
+
+                {/* Tooltip — pointer-only, so it never traps a touch user. */}
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute left-full ml-3 hidden whitespace-nowrap rounded-md bg-popover px-2.5 py-1 text-xs font-medium text-popover-foreground opacity-0 shadow-md transition-opacity can-hover:block group-hover:opacity-100"
+                >
+                  {item.label}
                 </span>
               </Link>
-            );
-          })}
-        </div>
-      </nav>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
 
-      {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/90 backdrop-blur-xl md:hidden">
-        <div className="flex items-center justify-around py-2">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const isActive =
-              href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(href);
-
-            return (
-              <Link
-                key={href}
-                href={isAuthenticated || href === "/shows/search" ? href : "/login"}
-                className={cn(
-                  "relative flex flex-col items-center gap-0.5 px-3 py-1.5 transition-colors",
-                  isActive
-                    ? "text-primary"
-                    : "text-muted-foreground"
-                )}
-              >
-                <Icon className="h-5 w-5" strokeWidth={isActive ? 2.2 : 1.8} />
-                <span className="text-[10px] font-medium">{label}</span>
-                {label === "Alerts" && unreadCount > 0 && (
-                  <span className="absolute -top-0.5 right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </div>
-        {/* Safe area padding for iOS */}
-        <div className="h-[env(safe-area-inset-bottom)]" />
-      </nav>
-    </>
+function UnreadDot({ count }: { count: number }) {
+  return (
+    <AnimatePresence>
+      <motion.span
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        exit={{ scale: 0 }}
+        className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold tabular-nums text-primary-foreground"
+      >
+        {count > 99 ? "99+" : count}
+        <span className="sr-only"> unread notifications</span>
+      </motion.span>
+    </AnimatePresence>
   );
 }

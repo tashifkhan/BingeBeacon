@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BingeBeacon Web
 
-## Getting Started
+The frontend is a TanStack Start PWA running on React 19, TanStack Router,
+TanStack Query, Vite, Tailwind CSS v4, and Bun.
 
-First, run the development server:
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
+bun install
+bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app runs at `http://localhost:3000`. Client-visible configuration must use
+the `VITE_` prefix; `VITE_API_URL` defaults to
+`http://localhost:8080/api/v1`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Quality checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+bun run typecheck
+bun run lint
+bun run build
+```
 
-## Learn More
+TanStack Start generates `src/routeTree.gen.ts` from `src/routes`. The Nitro
+Bun preset emits the production application to `.output`; run it with:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+bun run start
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Offline support
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`public/sw.js` uses network-first caching for pages and API reads,
+stale-while-revalidate for TMDB images, cache-first for static assets, and
+`/~offline` as the navigation fallback. TanStack Query separately persists the
+user's timeline, tracking, notification, watchlist, and history caches in local
+storage.

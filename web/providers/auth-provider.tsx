@@ -10,10 +10,8 @@ import {
 import { api, unwrap } from "@/lib/api";
 import {
   getAccessToken,
-  getRefreshToken,
-  setTokens,
+	setAccessToken,
   clearTokens,
-  isAuthenticated as checkAuth,
   isTokenExpired,
 } from "@/lib/auth";
 import type {
@@ -50,31 +48,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // On mount: check if we have a valid token and fetch user profile
   useEffect(() => {
     async function init() {
-      if (!checkAuth()) {
-        setState({ user: null, isAuthenticated: false, isLoading: false });
-        return;
-      }
-
-      const token = getAccessToken();
-      if (token && isTokenExpired(token)) {
-        // Try to refresh
-        const refreshToken = getRefreshToken();
-        if (refreshToken) {
-          try {
-            const tokens = await unwrap<TokenPair>(
-              api.post("/auth/refresh", { refresh_token: refreshToken })
-            );
-            setTokens(tokens.access_token, tokens.refresh_token);
-          } catch {
-            clearTokens();
-            setState({ user: null, isAuthenticated: false, isLoading: false });
-            return;
-          }
-        } else {
-          clearTokens();
-          setState({ user: null, isAuthenticated: false, isLoading: false });
-          return;
-        }
+	  const token = getAccessToken();
+	  if (!token || isTokenExpired(token)) {
+		try {
+		  const tokens = await unwrap<TokenPair>(api.post("/auth/refresh", {}));
+		  setAccessToken(tokens.access_token);
+		} catch {
+		  clearTokens();
+		  setState({ user: null, isAuthenticated: false, isLoading: false });
+		  return;
+		}
       }
 
       try {
@@ -91,24 +74,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(req: LoginRequest): Promise<void> {
     const tokens = await unwrap<TokenPair>(api.post("/auth/login", req));
-    setTokens(tokens.access_token, tokens.refresh_token);
+	setAccessToken(tokens.access_token);
     const profile = await unwrap<UserProfile>(api.get("/me"));
     setState({ user: profile, isAuthenticated: true, isLoading: false });
   }
 
   async function register(req: RegisterRequest): Promise<void> {
     const tokens = await unwrap<TokenPair>(api.post("/auth/register", req));
-    setTokens(tokens.access_token, tokens.refresh_token);
+	setAccessToken(tokens.access_token);
     const profile = await unwrap<UserProfile>(api.get("/me"));
     setState({ user: profile, isAuthenticated: true, isLoading: false });
   }
 
   async function logout(): Promise<void> {
-    const refreshToken = getRefreshToken();
-    try {
-      if (refreshToken) {
-        await api.post("/auth/logout", { refresh_token: refreshToken });
-      }
+	try {
+	  await api.post("/auth/logout", {});
     } catch {
       // Ignore logout errors
     } finally {

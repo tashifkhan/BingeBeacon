@@ -1,0 +1,15 @@
+# Frontend build context — sources only; deps and build artifacts are
+# produced inside the image.
+.git
+.env
+.env.*
+!.env.example
+node_modules
+.output
+.next
+.tanstack
+tsconfig.tsbuildinfo
+Dockerfile
+.dockerignore
+README.md
+*.log
