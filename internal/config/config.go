@@ -22,8 +22,10 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port        int    `mapstructure:"port"`
-	Environment string `mapstructure:"environment"`
+	Port           int    `mapstructure:"port"`
+	Environment    string `mapstructure:"environment"`
+	CORSOrigins    string `mapstructure:"cors_origins"`
+	InternalAPIKey string `mapstructure:"internal_api_key"`
 }
 
 type DatabaseConfig struct {
@@ -89,6 +91,8 @@ func Load() *Config {
 	// Set defaults
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.environment", "development")
+	viper.SetDefault("server.cors_origins", "http://localhost:3000")
+	viper.SetDefault("server.internal_api_key", "")
 	viper.SetDefault("database.host", "localhost")
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.user", "postgres")
@@ -98,7 +102,7 @@ func Load() *Config {
 	viper.SetDefault("redis.addr", "localhost:6379")
 	viper.SetDefault("redis.password", "")
 	viper.SetDefault("redis.db", 0)
-	viper.SetDefault("jwt.secret", "")
+	viper.SetDefault("jwt.secret", "development-only-secret-change-me")
 	viper.SetDefault("jwt.access_token_ttl", 15*time.Minute)
 	viper.SetDefault("jwt.refresh_token_ttl", 168*time.Hour)
 	viper.SetDefault("tmdb.api_key", "")
