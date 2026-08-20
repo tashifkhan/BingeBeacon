@@ -27,6 +27,16 @@ func (r *Repository) FindByShowAndEpisode(showID, episodeID uuid.UUID) (*Timelin
 	return &event, nil
 }
 
+
+func (r *Repository) FindByShowTypeAndDate(showID uuid.UUID, eventType string, eventDate time.Time) (*TimelineEvent, error) {
+	var event TimelineEvent
+	if err := r.db.Where("show_id = ? AND event_type = ? AND event_date = ?", showID, eventType, eventDate).
+		First(&event).Error; err != nil {
+		return nil, err
+	}
+	return &event, nil
+}
+
 func (r *Repository) GetUserTimeline(userID uuid.UUID, from, to time.Time, eventType string) ([]TimelineEvent, error) {
 	var events []TimelineEvent
 
@@ -69,4 +79,11 @@ func (r *Repository) GetUpcomingEvents(userID uuid.UUID, days int) ([]TimelineEv
 	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	end := start.Add(time.Duration(days) * 24 * time.Hour)
 	return r.GetUserTimeline(userID, start, end, "")
+}
+
+func (r *Repository) GetShowUpcomingEvents(showID uuid.UUID, from time.Time) ([]TimelineEvent, error) {
+	var events []TimelineEvent
+	err := r.db.Where("show_id = ? AND event_date >= ?", showID, from).
+		Order("event_date ASC").Find(&events).Error
+	return events, err
 }
