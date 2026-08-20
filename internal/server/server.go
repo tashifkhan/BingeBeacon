@@ -80,6 +80,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	notifRepo := notification.NewRepository(database)
 	watchlistRepo := watchlist.NewRepository(database)
 	historyRepo := history.NewRepository(database)
+	syncRepo := metadata.NewRepository(database)
 
 	// External Clients
 	tmdbClient := tmdb.NewClient(cfg.TMDB, log)
@@ -111,7 +112,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	streamingSvc := streaming.NewService(showRepo, tmdbClient, rdb)
 
 	// Syncer
-	syncer := metadata.NewSyncer(tmdbClient, omdbClient, thetvdbClient, showRepo, alertRepo, timelineRepo, rdb, log)
+	syncer := metadata.NewSyncer(tmdbClient, omdbClient, thetvdbClient, showRepo, alertRepo, timelineRepo, notifRepo, syncRepo, rdb, log)
 
 	alertSvc := alert.NewService(alertRepo, showSvc, showRepo, syncer, rdb)
 	timelineSvc := timeline.NewService(timelineRepo, rdb)
@@ -130,11 +131,10 @@ func NewServer(cfg *config.Config) (*Server, error) {
 
 	// Scheduler
 	sched := scheduler.NewScheduler(log)
-	sched.Register(jobs.NewEpisodeSyncJob(syncer, alertRepo, log))
-	if fcmClient != nil {
-		sched.Register(jobs.NewNotificationDispatchJob(notifRepo, userRepo, fcmClient, log))
-	}
-	sched.Register(jobs.NewStaleCleanupJob(notifRepo, log))
+	sched.Register(jobs.NewEpisodeSyncJob(syncer, showRepo, log))
+	sched.Register(jobs.NewChangesSyncJob(syncer, log))
+	sched.Register(jobs.NewNotificationDispatchJob(notifRepo, userRepo, fcmClient, log))
+	sched.Register(jobs.NewStaleCleanupJob(notifRepo, showRepo, syncRepo, log))
 
 	// Middleware
 	authMiddleware := auth.NewMiddleware(cfg.JWT)
