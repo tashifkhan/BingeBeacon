@@ -1,8 +1,11 @@
 package show
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Repository struct {
@@ -15,6 +18,15 @@ func NewRepository(db *gorm.DB) *Repository {
 
 func (r *Repository) Create(show *Show) error {
 	return r.db.Create(show).Error
+}
+
+func (r *Repository) UpsertSearchResult(item *Show) error {
+	return r.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "tmdb_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"title", "media_type", "overview", "poster_url", "backdrop_url", "premiere_date", "updated_at",
+		}),
+	}, clause.Returning{Columns: []clause.Column{{Name: "id"}}}).Create(item).Error
 }
 
 func (r *Repository) FindByID(id uuid.UUID) (*Show, error) {
@@ -97,6 +109,40 @@ func (r *Repository) GetEpisodeByNumber(showID uuid.UUID, seasonNum, episodeNum 
 		return nil, err
 	}
 	return &episode, nil
+}
+
+func (r *Repository) GetTrackedForSync(limit int) ([]Show, error) {
+	var shows []Show
+	err := r.db.Table("shows").
+		Select("shows.*").
+		Joins("INNER JOIN user_tracked_shows uts ON uts.show_id = shows.id").
+		Group("shows.id").
+		Order("shows.sync_priority DESC, shows.last_synced_at ASC").
+		Limit(limit).
+		Find(&shows).Error
+	return shows, err
+}
+
+func (r *Repository) FindByTMDBIDs(mediaType string, ids []int) ([]Show, error) {
+	if len(ids) == 0 {
+		return []Show{}, nil
+	}
+	var shows []Show
+	err := r.db.Where("media_type = ? AND tmdb_id IN ?", mediaType, ids).Find(&shows).Error
+	return shows, err
+}
+
+func (r *Repository) BumpSyncPriority(showID uuid.UUID) error {
+	return r.db.Model(&Show{}).Where("id = ?", showID).
+		UpdateColumn("sync_priority", gorm.Expr("sync_priority + 1")).Error
+}
+
+func (r *Repository) ResetUntrackedSyncPriorities(cutoff time.Time) (int64, error) {
+	result := r.db.Model(&Show{}).
+		Where("sync_priority > 0 AND last_synced_at < ?", cutoff).
+		Where("NOT EXISTS (SELECT 1 FROM user_tracked_shows uts WHERE uts.show_id = shows.id)").
+		Update("sync_priority", 0)
+	return result.RowsAffected, result.Error
 }
 
 func (r *Repository) CountEpisodes(showID uuid.UUID) (int, error) {
