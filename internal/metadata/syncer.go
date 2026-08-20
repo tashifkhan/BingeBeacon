@@ -89,7 +89,7 @@ func (s *Syncer) SyncShow(ctx context.Context, showID uuid.UUID) error {
 	}
 
 	// Fetch External IDs
-	extIDs, err := s.tmdb.GetExternalIDs(ctx, *localShow.TMDBID)
+	extIDs, err := s.tmdb.GetExternalIDs(ctx, "tv", *localShow.TMDBID)
 	if err == nil {
 		localShow.IMDBID = extIDs.IMDBID
 		localShow.TheTVDBID = extIDs.TVDBID

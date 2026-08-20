@@ -63,6 +63,18 @@ type TVShowDetail struct {
 	Seasons      []Season  `json:"seasons"`
 }
 
+type MovieDetail struct {
+	ID           int     `json:"id"`
+	Title        string  `json:"title"`
+	Overview     string  `json:"overview"`
+	PosterPath   string  `json:"poster_path"`
+	BackdropPath string  `json:"backdrop_path"`
+	Status       string  `json:"status"`
+	ReleaseDate  string  `json:"release_date"`
+	Runtime      int     `json:"runtime"`
+	Genres       []Genre `json:"genres"`
+}
+
 type Genre struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
@@ -118,4 +130,16 @@ type PopularResponse struct {
 	Results      []SearchResult `json:"results"`
 	TotalPages   int            `json:"total_pages"`
 	TotalResults int            `json:"total_results"`
+}
+
+type ChangesResponse struct {
+	Page         int            `json:"page"`
+	Results      []ChangeResult `json:"results"`
+	TotalPages   int            `json:"total_pages"`
+	TotalResults int            `json:"total_results"`
+}
+
+type ChangeResult struct {
+	ID    int  `json:"id"`
+	Adult bool `json:"adult"`
 }
