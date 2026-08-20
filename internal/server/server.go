@@ -106,7 +106,6 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	}
 	showSvc := show.NewService(showRepo, tmdbClient, rdb)
 	notifSvc := notification.NewService(notifRepo, rdb)
-	watchlistSvc := watchlist.NewService(watchlistRepo, showRepo, alertRepo)
 	historySvc := history.NewService(historyRepo, showRepo, alertRepo)
 	showtimesSvc := showtimes.NewService(movieGluClient, showRepo, rdb)
 	streamingSvc := streaming.NewService(showRepo, tmdbClient, rdb)
@@ -115,6 +114,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	syncer := metadata.NewSyncer(tmdbClient, omdbClient, thetvdbClient, showRepo, alertRepo, timelineRepo, notifRepo, syncRepo, rdb, log)
 
 	alertSvc := alert.NewService(alertRepo, showSvc, showRepo, syncer, rdb)
+	watchlistSvc := watchlist.NewService(watchlistRepo, showRepo, alertSvc)
 	timelineSvc := timeline.NewService(timelineRepo, rdb)
 
 	// Handlers

@@ -10,16 +10,16 @@ import (
 )
 
 type Service struct {
-	repo      *Repository
-	showRepo  *show.Repository
-	alertRepo *alert.Repository
+	repo     *Repository
+	showRepo *show.Repository
+	alertSvc *alert.Service
 }
 
-func NewService(repo *Repository, showRepo *show.Repository, alertRepo *alert.Repository) *Service {
+func NewService(repo *Repository, showRepo *show.Repository, alertSvc *alert.Service) *Service {
 	return &Service{
-		repo:      repo,
-		showRepo:  showRepo,
-		alertRepo: alertRepo,
+		repo:     repo,
+		showRepo: showRepo,
+		alertSvc: alertSvc,
 	}
 }
 
@@ -86,16 +86,7 @@ func (s *Service) StartTracking(ctx context.Context, userID, showID uuid.UUID) e
 		return errors.New("show not found")
 	}
 	// Create tracking entry
-	track := &alert.UserTrackedShow{
-		UserID:             userID,
-		ShowID:             showID,
-		IsFavorite:         false,
-		NotifyNewEpisode:   true,
-		NotifyNewSeason:    true,
-		NotifyStatusChange: true,
-		NotifyHoursBefore:  0,
-	}
-	if err := s.alertRepo.Create(track); err != nil {
+	if err := s.alertSvc.TrackShow(ctx, userID, alert.TrackRequest{ShowID: &showID}); err != nil {
 		return err
 	}
 	// Remove from watchlist
