@@ -18,5 +18,7 @@ type Notification struct {
 	ScheduledFor    time.Time      `gorm:"not null;index"`
 	SentAt          *time.Time
 	ReadAt          *time.Time
+	RetryCount      int `gorm:"not null;default:0"`
+	LastError       *string
 	CreatedAt       time.Time
 }

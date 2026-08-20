@@ -1,6 +1,9 @@
 package user
 
 import (
+	"errors"
+	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -22,6 +25,7 @@ type UserProfile struct {
 
 type UpdateProfileRequest struct {
 	Timezone string `json:"timezone"`
+	Username string `json:"username"`
 }
 
 type RegisterDeviceRequest struct {
@@ -56,13 +60,28 @@ func (s *Service) UpdateProfile(userID uuid.UUID, req UpdateProfileRequest) erro
 	}
 
 	if req.Timezone != "" {
+		if _, err := time.LoadLocation(req.Timezone); err != nil {
+			return errors.New("timezone must be a valid IANA timezone, for example Asia/Kolkata")
+		}
 		u.Timezone = req.Timezone
+	}
+	if req.Username != "" {
+		if len(req.Username) < 3 || len(req.Username) > 30 {
+			return errors.New("username must be 3-30 characters")
+		}
+		u.Username = req.Username
 	}
 
 	return s.repo.Update(u)
 }
 
 func (s *Service) RegisterDevice(userID uuid.UUID, req RegisterDeviceRequest) error {
+	if req.DeviceToken == "" {
+		return errors.New("device_token is required")
+	}
+	if req.Platform != "web" && req.Platform != "ios" && req.Platform != "android" {
+		return errors.New("platform must be web, ios, or android")
+	}
 	// Simple upsert logic: if token exists for user, update platform/active, else create
 	// For now, assume create. A proper upsert query would be better.
 

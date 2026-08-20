@@ -1,8 +1,11 @@
 package user
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type Repository struct {
@@ -38,11 +41,23 @@ func (r *Repository) Update(user *User) error {
 }
 
 func (r *Repository) AddDevice(device *UserDevice) error {
-	return r.db.Create(device).Error
+	return r.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "user_id"}, {Name: "device_token"}},
+		DoUpdates: clause.Assignments(map[string]interface{}{
+			"platform":   device.Platform,
+			"is_active":  true,
+			"updated_at": time.Now(),
+		}),
+	}).Create(device).Error
 }
 
 func (r *Repository) RemoveDevice(deviceID, userID uuid.UUID) error {
 	return r.db.Delete(&UserDevice{}, "id = ? AND user_id = ?", deviceID, userID).Error
+}
+
+func (r *Repository) DeactivateDevice(deviceID uuid.UUID) error {
+	return r.db.Model(&UserDevice{}).Where("id = ?", deviceID).
+		Updates(map[string]interface{}{"is_active": false, "updated_at": time.Now()}).Error
 }
 
 func (r *Repository) GetDevices(userID uuid.UUID) ([]UserDevice, error) {
