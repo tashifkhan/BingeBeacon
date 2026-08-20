@@ -97,6 +97,12 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	// Services
 	userSvc := user.NewService(userRepo)
 	authSvc := auth.NewService(authRepo, userRepo, cfg.JWT)
+	if err := authSvc.ValidateConfig(); err != nil {
+		return nil, fmt.Errorf("invalid auth configuration: %w", err)
+	}
+	if cfg.Server.Environment == "production" && cfg.JWT.Secret == "development-only-secret-change-me" {
+		return nil, fmt.Errorf("invalid auth configuration: set JWT_SECRET in production")
+	}
 	showSvc := show.NewService(showRepo, tmdbClient, rdb)
 	notifSvc := notification.NewService(notifRepo, rdb)
 	watchlistSvc := watchlist.NewService(watchlistRepo, showRepo, alertRepo)
@@ -112,7 +118,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 
 	// Handlers
 	userHandler := user.NewHandler(userSvc)
-	authHandler := auth.NewHandler(authSvc)
+	authHandler := auth.NewHandler(authSvc, cfg.JWT, cfg.Server.Environment)
 	showHandler := show.NewHandler(showSvc)
 	alertHandler := alert.NewHandler(alertSvc)
 	timelineHandler := timeline.NewHandler(timelineSvc)
@@ -262,7 +268,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"}, // Customize for production
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-Client-Platform"},
 		AllowCredentials: true,
 	})
 
