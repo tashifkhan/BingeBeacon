@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -21,7 +22,7 @@ func NewNotificationDispatchJob(
 		Interval: 1 * time.Minute,
 		Run: func(ctx context.Context) error {
 			// 1. Get pending notifications due
-			notifs, err := notifRepo.GetPendingDue(500)
+			notifs, err := notifRepo.ClaimPendingDue(500)
 			if err != nil {
 				return err
 			}
@@ -37,11 +38,19 @@ func NewNotificationDispatchJob(
 					return ctx.Err()
 				}
 
+				// In-app notifications remain fully functional without Firebase.
+				if fcm == nil {
+					if err := notifRepo.MarkSent(n.ID); err != nil {
+						logger.Error("Failed to mark in-app notification ready", "notification_id", n.ID, "error", err)
+					}
+					continue
+				}
+
 				// 2. Get user devices
 				devices, err := userRepo.GetDevices(n.UserID)
 				if err != nil {
 					logger.Error("Failed to get user devices", "user_id", n.UserID, "error", err)
-					notifRepo.MarkFailed(n.ID)
+					_ = notifRepo.RetryOrFail(n.ID, err, 3)
 					continue
 				}
 
@@ -55,26 +64,34 @@ func NewNotificationDispatchJob(
 
 				// 3. Send via FCM
 				sentCount := 0
+				activeCount := 0
+				var lastSendErr error
 				for _, d := range devices {
 					if !d.IsActive {
 						continue
 					}
+					activeCount++
 
 					// Should verify token format etc.
 					err := fcm.SendToDevice(ctx, d.DeviceToken, n.Title, n.Body, nil)
 					if err != nil {
+						lastSendErr = err
 						logger.Error("FCM send failed", "device_id", d.ID, "error", err)
-						// If invalid token, deactivate device?
+						if notification.IsUnregisteredToken(err) {
+							_ = userRepo.DeactivateDevice(d.ID)
+						}
 					} else {
 						sentCount++
 					}
 				}
 
-				if sentCount > 0 {
+				if activeCount == 0 || sentCount > 0 {
 					notifRepo.MarkSent(n.ID)
 				} else {
-					// All failed
-					notifRepo.MarkFailed(n.ID)
+					if lastSendErr == nil {
+						lastSendErr = fmt.Errorf("all push deliveries failed")
+					}
+					_ = notifRepo.RetryOrFail(n.ID, lastSendErr, 3)
 				}
 			}
 			return nil
