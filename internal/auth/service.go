@@ -2,6 +2,9 @@ package auth
 
 import (
 	"errors"
+	"fmt"
+	"net/mail"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -26,6 +29,17 @@ func NewService(repo *Repository, userRepo *user.Repository, cfg config.JWTConfi
 }
 
 func (s *Service) Register(req RegisterRequest) (*TokenPair, error) {
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Username = strings.TrimSpace(req.Username)
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		return nil, errors.New("a valid email is required")
+	}
+	if len(req.Username) < 3 || len(req.Username) > 30 {
+		return nil, errors.New("username must be 3-30 characters")
+	}
+	if len(req.Password) < 8 || len(req.Password) > 72 {
+		return nil, errors.New("password must be 8-72 characters")
+	}
 	// Check if user exists
 	if _, err := s.userRepo.FindByEmail(req.Email); err == nil {
 		return nil, errors.New("email already registered")
@@ -50,7 +64,7 @@ func (s *Service) Register(req RegisterRequest) (*TokenPair, error) {
 }
 
 func (s *Service) Login(req LoginRequest) (*TokenPair, error) {
-	u, err := s.userRepo.FindByEmail(req.Email)
+	u, err := s.userRepo.FindByEmail(strings.ToLower(strings.TrimSpace(req.Email)))
 	if err != nil {
 		return nil, errors.New("invalid credentials")
 	}
@@ -87,10 +101,15 @@ func (s *Service) Logout(tokenStr string) error {
 }
 
 func (s *Service) generateTokenPair(userID uuid.UUID) (*TokenPair, error) {
+	now := time.Now()
 	// Access Token
 	accessTokenClaims := jwt.MapClaims{
 		"user_id": userID.String(),
-		"exp":     time.Now().Add(s.cfg.AccessTokenTTL).Unix(),
+		"sub":     userID.String(),
+		"type":    "access",
+		"jti":     uuid.NewString(),
+		"iat":     now.Unix(),
+		"exp":     now.Add(s.cfg.AccessTokenTTL).Unix(),
 	}
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessTokenClaims)
 	accessTokenString, err := accessToken.SignedString([]byte(s.cfg.Secret))
@@ -101,7 +120,11 @@ func (s *Service) generateTokenPair(userID uuid.UUID) (*TokenPair, error) {
 	// Refresh Token
 	refreshTokenClaims := jwt.MapClaims{
 		"user_id": userID.String(),
-		"exp":     time.Now().Add(s.cfg.RefreshTokenTTL).Unix(),
+		"sub":     userID.String(),
+		"type":    "refresh",
+		"jti":     uuid.NewString(),
+		"iat":     now.Unix(),
+		"exp":     now.Add(s.cfg.RefreshTokenTTL).Unix(),
 	}
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshTokenClaims)
 	refreshTokenString, err := refreshToken.SignedString([]byte(s.cfg.Secret))
@@ -113,7 +136,7 @@ func (s *Service) generateTokenPair(userID uuid.UUID) (*TokenPair, error) {
 	err = s.repo.CreateRefreshToken(&RefreshToken{
 		UserID:    userID,
 		Token:     refreshTokenString,
-		ExpiresAt: time.Now().Add(s.cfg.RefreshTokenTTL),
+		ExpiresAt: now.Add(s.cfg.RefreshTokenTTL),
 	})
 	if err != nil {
 		return nil, err
@@ -124,4 +147,14 @@ func (s *Service) generateTokenPair(userID uuid.UUID) (*TokenPair, error) {
 		RefreshToken: refreshTokenString,
 		ExpiresIn:    int64(s.cfg.AccessTokenTTL.Seconds()),
 	}, nil
+}
+
+func (s *Service) ValidateConfig() error {
+	if len(s.cfg.Secret) < 32 {
+		return fmt.Errorf("JWT secret must be at least 32 characters")
+	}
+	if s.cfg.AccessTokenTTL <= 0 || s.cfg.RefreshTokenTTL <= 0 {
+		return fmt.Errorf("JWT token TTLs must be positive")
+	}
+	return nil
 }

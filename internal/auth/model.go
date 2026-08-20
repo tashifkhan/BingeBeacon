@@ -20,7 +20,7 @@ type LoginRequest struct {
 
 type TokenPair struct {
 	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
 	ExpiresIn    int64  `json:"expires_in"`
 }
 
