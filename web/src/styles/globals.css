@@ -1,0 +1,481 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Pointer-capability variants.
+
+  Tailwind v4 already scopes `hover:` to `@media (hover: hover)`, so anything
+  revealed purely on hover is unreachable on a touch screen. `can-hover:` and
+  `touch:` let a component opt into two honest layouts: hover-reveal on a
+  mouse, always-visible on a finger.
+*/
+@custom-variant can-hover (@media (hover: hover) and (pointer: fine));
+@custom-variant touch (@media (hover: none));
+
+/*
+  BingeBeacon theme tokens.
+
+  Two palettes share one amber identity: warm light on paper, and warm light
+  cutting through charcoal. Light lives on :root, dark on .dark, and
+  next-themes swaps the class (following the OS when set to "system").
+*/
+
+@theme inline {
+  /* Fonts */
+  --font-display: "Sora Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Color system */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Sidebar */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  /* Chart */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Radii */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Custom BingeBeacon tokens */
+  --color-amber: oklch(0.769 0.171 70.08);
+  --color-amber-dim: oklch(0.600 0.130 70.08);
+  --color-amber-glow: oklch(0.820 0.200 70.08);
+  --color-surface: var(--card);
+  --color-surface-foreground: var(--card-foreground);
+}
+
+/*
+  Chrome metrics — shared by the nav and by the scroll containers that must
+  clear it, so the two can never drift apart. These live in a non-`inline`
+  @theme block on purpose: `@theme inline` folds values into utilities without
+  emitting custom properties, and `.pb-nav` below needs the real var.
+*/
+@theme {
+  --spacing-nav-rail: 4.5rem;
+  --spacing-nav-bar: 3.75rem;
+}
+
+/*
+  Light theme — the default. Warm paper rather than pure white, so the amber
+  beacon still reads as warm light against it instead of fighting a cold grey.
+  The primary is darkened from the dark-mode amber: the bright value only
+  clears 1.9:1 on white, so it stays as an accent/fill and the text-safe
+  variant is used for foreground-on-background copy.
+*/
+:root {
+  --radius: 0.625rem;
+
+  --background: oklch(0.988 0.003 85);
+  --foreground: oklch(0.205 0.012 260);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0.012 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.205 0.012 260);
+
+  /* Amber, deepened so white text on it passes contrast. */
+  --primary: oklch(0.550 0.148 55);
+  --primary-foreground: oklch(0.995 0.002 85);
+
+  --secondary: oklch(0.960 0.006 260);
+  --secondary-foreground: oklch(0.300 0.012 260);
+
+  --muted: oklch(0.960 0.005 260);
+  --muted-foreground: oklch(0.505 0.012 260);
+
+  --accent: oklch(0.955 0.025 70);
+  --accent-foreground: oklch(0.300 0.020 60);
+
+  --destructive: oklch(0.545 0.210 25);
+
+  --border: oklch(0.205 0.012 260 / 12%);
+  --input: oklch(0.205 0.012 260 / 16%);
+  --ring: oklch(0.550 0.148 55);
+
+  --chart-1: oklch(0.550 0.148 55);
+  --chart-2: oklch(0.520 0.140 160);
+  --chart-3: oklch(0.500 0.180 290);
+  --chart-4: oklch(0.600 0.150 30);
+  --chart-5: oklch(0.520 0.130 200);
+
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.205 0.012 260);
+  --sidebar-primary: oklch(0.550 0.148 55);
+  --sidebar-primary-foreground: oklch(0.995 0.002 85);
+  --sidebar-accent: oklch(0.955 0.025 70);
+  --sidebar-accent-foreground: oklch(0.300 0.020 60);
+  --sidebar-border: oklch(0.205 0.012 260 / 12%);
+  --sidebar-ring: oklch(0.550 0.148 55);
+
+  /* Ambient glow tint — amber in both themes, but far subtler on paper. */
+  --glow-rgb: 217 119 6;
+  --glow-near: 0.10;
+  --glow-far: 0.04;
+}
+
+/*
+  Dark theme — the original cinematic palette. Warm amber cutting through deep
+  charcoal: the "beacon" in BingeBeacon.
+*/
+.dark {
+  --background: oklch(0.130 0.012 260);
+  --foreground: oklch(0.930 0.006 260);
+
+  --card: oklch(0.170 0.012 260);
+  --card-foreground: oklch(0.930 0.006 260);
+  --popover: oklch(0.185 0.012 260);
+  --popover-foreground: oklch(0.930 0.006 260);
+
+  --primary: oklch(0.769 0.171 70.08);
+  --primary-foreground: oklch(0.145 0.03 60);
+
+  --secondary: oklch(0.220 0.012 260);
+  --secondary-foreground: oklch(0.850 0.006 260);
+
+  --muted: oklch(0.200 0.010 260);
+  --muted-foreground: oklch(0.580 0.010 260);
+
+  --accent: oklch(0.220 0.030 60);
+  --accent-foreground: oklch(0.930 0.006 260);
+
+  --destructive: oklch(0.650 0.220 25);
+
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.769 0.171 70.08);
+
+  --chart-1: oklch(0.769 0.171 70.08);
+  --chart-2: oklch(0.650 0.170 160);
+  --chart-3: oklch(0.550 0.200 290);
+  --chart-4: oklch(0.700 0.160 30);
+  --chart-5: oklch(0.600 0.150 200);
+
+  --sidebar: oklch(0.150 0.012 260);
+  --sidebar-foreground: oklch(0.930 0.006 260);
+  --sidebar-primary: oklch(0.769 0.171 70.08);
+  --sidebar-primary-foreground: oklch(0.145 0.03 60);
+  --sidebar-accent: oklch(0.220 0.030 60);
+  --sidebar-accent-foreground: oklch(0.930 0.006 260);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.769 0.171 70.08);
+
+  --glow-rgb: 245 158 11;
+  --glow-near: 0.15;
+  --glow-far: 0.05;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    /* Stop iOS inflating text when a phone is rotated to landscape. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    /* Kill the grey flash iOS paints over every tap target. */
+    -webkit-tap-highlight-color: transparent;
+    /* No rubber-band past the app chrome — this should feel installed. */
+    overscroll-behavior-y: none;
+  }
+
+  /* Anything tappable gets the fast-tap treatment and an honest focus ring. */
+  button,
+  a,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+
+  /* iOS zooms the viewport when a focused field is under 16px. Keep inputs at
+     16px on small screens and let them shrink only once there's a real
+     keyboard in play. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  @media (min-width: 768px) {
+    input,
+    select,
+    textarea {
+      font-size: 0.875rem;
+    }
+  }
+
+  /* Headings read tighter and more cinematic in the display face. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+}
+
+/* Custom scrollbar for the cinematic feel */
+@layer base {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--foreground) 25%, transparent);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--foreground) 40%, transparent);
+  }
+}
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes beacon-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% center;
+  }
+  to {
+    background-position: 200% center;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out both;
+  }
+  .animate-fade-in-scale {
+    animation: fade-in-scale 0.3s ease-out both;
+  }
+  .animate-beacon-pulse {
+    animation: beacon-pulse 2s ease-in-out infinite;
+  }
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
+    background-size: 200% auto;
+  }
+  .stagger-1 { animation-delay: 50ms; }
+  .stagger-2 { animation-delay: 100ms; }
+  .stagger-3 { animation-delay: 150ms; }
+  .stagger-4 { animation-delay: 200ms; }
+  .stagger-5 { animation-delay: 250ms; }
+  .stagger-6 { animation-delay: 300ms; }
+}
+
+/* Ambient glow for primary actions. Driven by per-theme vars so the effect
+   reads as warm light in the dark theme and a soft lift on paper. */
+@layer utilities {
+  .glow-amber {
+    box-shadow:
+      0 0 20px rgb(var(--glow-rgb) / var(--glow-near)),
+      0 0 60px rgb(var(--glow-rgb) / var(--glow-far));
+  }
+  .glow-amber-strong {
+    box-shadow:
+      0 0 20px rgb(var(--glow-rgb) / calc(var(--glow-near) * 2)),
+      0 0 60px rgb(var(--glow-rgb) / calc(var(--glow-far) * 2));
+  }
+}
+
+/*
+  ---------- Mobile-first primitives ----------
+
+  These are declared with `@utility` rather than `@layer utilities` so Tailwind
+  registers them as first-class utilities. A plain `.pb-nav` rule in the
+  utilities layer is emitted after Tailwind's own output and would beat
+  `md:pb-0` even inside its media query — leaving dead space under every
+  desktop page.
+*/
+
+/* Safe-area insets, so content never lands under the notch or home indicator. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility px-safe {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+@utility mb-safe {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+
+/* Clears the fixed bottom nav plus the home indicator underneath it. */
+@utility pb-nav {
+  padding-bottom: calc(
+    var(--spacing-nav-bar) + env(safe-area-inset-bottom) + 1rem
+  );
+}
+
+/* WCAG 2.5.5: a touch target is never smaller than 44x44, even when the glyph
+   inside it is 16px. */
+@utility touch-target {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+/* Horizontal scroll rails: snap, momentum, no visible scrollbar. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+@utility rail {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  & > * {
+    scroll-snap-align: start;
+    flex: none;
+  }
+}
+
+/* Press feedback — the mobile stand-in for hover. */
+@utility press {
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+/*
+  Theme switching crossfade. Without this the two snapshots cross-dissolve at
+  different rates and the page visibly flickers through a lighter frame; here
+  the outgoing snapshot simply holds while the new one fades over it.
+*/
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  animation: none;
+}
+::view-transition-new(root) {
+  animation: theme-fade 260ms ease-out;
+}
+
+@keyframes theme-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
+/*
+  Honour the OS "reduce motion" setting. The staggered reveals are decorative,
+  so they collapse to a plain fade rather than disappearing entirely.
+*/
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-fade-in,
+  .animate-fade-in-scale {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
