@@ -37,7 +37,7 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 		tokenString := parts[1]
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 				return nil, errors.New("unexpected signing method")
 			}
 			return []byte(m.cfg.Secret), nil
@@ -51,6 +51,10 @@ func (m *Middleware) Authenticate(next http.Handler) http.Handler {
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
 			httputil.Error(w, http.StatusUnauthorized, "Invalid token claims")
+			return
+		}
+		if tokenType, ok := claims["type"].(string); !ok || tokenType != "access" {
+			httputil.Error(w, http.StatusUnauthorized, "Access token required")
 			return
 		}
 
