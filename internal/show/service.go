@@ -26,13 +26,13 @@ func NewService(repo *Repository, tmdbClient *tmdb.Client, rdb *redis.Client) *S
 }
 
 type ShowResult struct {
-	ID        uuid.UUID `json:"id"`
-	TMDBID    int       `json:"tmdb_id"`
-	Title     string    `json:"title"`
-	Overview  string    `json:"overview"`
-	PosterURL string    `json:"poster_url"`
-	MediaType string    `json:"media_type"`
-	Year      string    `json:"year"`
+	ID        *uuid.UUID `json:"id,omitempty"`
+	TMDBID    int        `json:"tmdb_id"`
+	Title     string     `json:"title"`
+	Overview  string     `json:"overview"`
+	PosterURL string     `json:"poster_url"`
+	MediaType string     `json:"media_type"`
+	Year      string     `json:"year"`
 }
 
 func (s *Service) Search(ctx context.Context, query string, mediaType string) ([]ShowResult, error) {
@@ -53,7 +53,7 @@ func (s *Service) Search(ctx context.Context, query string, mediaType string) ([
 			if show.TMDBID != nil {
 				seenTMDBIDs[*show.TMDBID] = true
 				results = append(results, ShowResult{
-					ID:        show.ID,
+					ID:        &show.ID,
 					TMDBID:    *show.TMDBID,
 					Title:     show.Title,
 					Overview:  SafeString(show.Overview),
@@ -80,29 +80,116 @@ func (s *Service) Search(ctx context.Context, query string, mediaType string) ([
 						continue
 					}
 
-					title := item.Name
-					if item.MediaType == "movie" {
-						title = item.Title
-					}
-
 					dateStr := item.FirstAirDate
 					if item.MediaType == "movie" {
 						dateStr = item.ReleaseDate
 					}
 
-					results = append(results, ShowResult{
-						TMDBID:    item.ID,
-						Title:     title,
-						Overview:  item.Overview,
-						PosterURL: "https://image.tmdb.org/t/p/w500" + item.PosterPath,
-						MediaType: item.MediaType,
-						Year:      dateStr,
-					})
+					stored := showFromSearchResult(item)
+					if err := s.repo.UpsertSearchResult(stored); err != nil {
+						continue
+					}
+					results = append(results, mapSearchResult(stored, dateStr))
 				}
 			}
 		}
 		return results, nil
 	})
+}
+
+func (s *Service) GetTrending(ctx context.Context, mediaType, timeWindow string) ([]ShowResult, error) {
+	if mediaType == "" {
+		mediaType = "all"
+	}
+	if mediaType != "all" && mediaType != "tv" && mediaType != "movie" {
+		return nil, fmt.Errorf("type must be all, tv, or movie")
+	}
+	if timeWindow == "" {
+		timeWindow = "day"
+	}
+	if timeWindow != "day" && timeWindow != "week" {
+		return nil, fmt.Errorf("window must be day or week")
+	}
+	key := fmt.Sprintf("trending:%s:%s", mediaType, timeWindow)
+	return cache.GetOrSet(ctx, s.redis, key, time.Hour, func() ([]ShowResult, error) {
+		response, err := s.tmdbClient.GetTrending(ctx, mediaType, timeWindow)
+		if err != nil {
+			return nil, err
+		}
+		return s.persistDiscoveryResults(response.Results)
+	})
+}
+
+func (s *Service) GetPopular(ctx context.Context, mediaType string, page int) ([]ShowResult, error) {
+	if mediaType == "" {
+		mediaType = "tv"
+	}
+	if mediaType != "tv" && mediaType != "movie" {
+		return nil, fmt.Errorf("type must be tv or movie")
+	}
+	if page <= 0 {
+		page = 1
+	}
+	key := fmt.Sprintf("popular:%s:%d", mediaType, page)
+	return cache.GetOrSet(ctx, s.redis, key, time.Hour, func() ([]ShowResult, error) {
+		response, err := s.tmdbClient.GetPopular(ctx, mediaType, page)
+		if err != nil {
+			return nil, err
+		}
+		return s.persistDiscoveryResults(response.Results)
+	})
+}
+
+func (s *Service) persistDiscoveryResults(items []tmdb.SearchResult) ([]ShowResult, error) {
+	results := make([]ShowResult, 0, len(items))
+	for _, item := range items {
+		if item.MediaType == "" {
+			// TMDB's media-specific popular endpoints omit media_type.
+			if item.Name != "" {
+				item.MediaType = "tv"
+			} else {
+				item.MediaType = "movie"
+			}
+		}
+		if item.MediaType != "tv" && item.MediaType != "movie" {
+			continue
+		}
+		stored := showFromSearchResult(item)
+		if err := s.repo.UpsertSearchResult(stored); err != nil {
+			return nil, err
+		}
+		date := item.FirstAirDate
+		if item.MediaType == "movie" {
+			date = item.ReleaseDate
+		}
+		results = append(results, mapSearchResult(stored, date))
+	}
+	return results, nil
+}
+
+func showFromSearchResult(item tmdb.SearchResult) *Show {
+	title := item.Name
+	date := item.FirstAirDate
+	if item.MediaType == "movie" {
+		title = item.Title
+		date = item.ReleaseDate
+	}
+	overview := item.Overview
+	poster := item.PosterPath
+	backdrop := item.BackdropPath
+	return &Show{
+		Title: title, MediaType: item.MediaType, TMDBID: &item.ID,
+		Overview: &overview, PosterURL: &poster, BackdropURL: &backdrop,
+		PremiereDate: parseTMDBDate(date),
+	}
+}
+
+func mapSearchResult(item *Show, date string) ShowResult {
+	return ShowResult{
+		ID: &item.ID, TMDBID: *item.TMDBID, Title: item.Title,
+		Overview: SafeString(item.Overview), PosterURL: SafeString(item.PosterURL),
+		MediaType: item.MediaType, Year: ExtractYearString(date),
+	}
 }
 
 func (s *Service) GetShow(ctx context.Context, id uuid.UUID) (*Show, error) {
@@ -131,38 +218,53 @@ func (s *Service) GetEpisodes(ctx context.Context, showID uuid.UUID, upcoming bo
 	})
 }
 
-func (s *Service) GetOrCreateByTMDBID(ctx context.Context, tmdbID int) (*Show, error) {
+func (s *Service) GetOrCreateByTMDBID(ctx context.Context, tmdbID int, mediaType string) (*Show, error) {
+	if mediaType == "" {
+		mediaType = "tv"
+	}
+	if mediaType != "tv" && mediaType != "movie" {
+		return nil, fmt.Errorf("unsupported media type %q", mediaType)
+	}
+
 	// Check if exists
 	show, err := s.repo.FindByTMDBID(tmdbID)
 	if err == nil {
+		if show.MediaType != mediaType {
+			return nil, fmt.Errorf("TMDB ID %d is already stored as %s", tmdbID, show.MediaType)
+		}
 		return show, nil
 	}
 
-	// Fetch from TMDB
-	tmdbShow, err := s.tmdbClient.GetTVShow(ctx, tmdbID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create Show struct
-	// This is a minimal creation. Full sync happens in Syncer.
-	// But we need enough to display basic info.
-
-	newShow := &Show{
-		TMDBID:       &tmdbShow.ID,
-		Title:        tmdbShow.Name,
-		Overview:     &tmdbShow.Overview,
-		PosterURL:    &tmdbShow.PosterPath,
-		BackdropURL:  &tmdbShow.BackdropPath,
-		MediaType:    "tv", // Assuming TV for now
-		Status:       &tmdbShow.Status,
-		SyncPriority: 1, // High priority for initial sync
-	}
-
-	if tmdbShow.FirstAirDate != "" {
-		date, err := time.Parse("2006-01-02", tmdbShow.FirstAirDate)
-		if err == nil {
-			newShow.PremiereDate = &date
+	newShow := &Show{MediaType: mediaType, SyncPriority: 1}
+	if mediaType == "movie" {
+		movie, fetchErr := s.tmdbClient.GetMovie(ctx, tmdbID)
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+		newShow.TMDBID = &movie.ID
+		newShow.Title = movie.Title
+		newShow.Overview = &movie.Overview
+		newShow.PosterURL = &movie.PosterPath
+		newShow.BackdropURL = &movie.BackdropPath
+		newShow.Status = &movie.Status
+		newShow.PremiereDate = parseTMDBDate(movie.ReleaseDate)
+		for _, genre := range movie.Genres {
+			newShow.Genres = append(newShow.Genres, genre.Name)
+		}
+	} else {
+		tvShow, fetchErr := s.tmdbClient.GetTVShow(ctx, tmdbID)
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+		newShow.TMDBID = &tvShow.ID
+		newShow.Title = tvShow.Name
+		newShow.Overview = &tvShow.Overview
+		newShow.PosterURL = &tvShow.PosterPath
+		newShow.BackdropURL = &tvShow.BackdropPath
+		newShow.Status = &tvShow.Status
+		newShow.PremiereDate = parseTMDBDate(tvShow.FirstAirDate)
+		for _, genre := range tvShow.Genres {
+			newShow.Genres = append(newShow.Genres, genre.Name)
 		}
 	}
 
@@ -172,6 +274,17 @@ func (s *Service) GetOrCreateByTMDBID(ctx context.Context, tmdbID int) (*Show, e
 
 	// Retrieve to get the generated UUID
 	return s.repo.FindByTMDBID(tmdbID)
+}
+
+func parseTMDBDate(value string) *time.Time {
+	if value == "" {
+		return nil
+	}
+	parsed, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return nil
+	}
+	return &parsed
 }
 
 // Helpers
@@ -187,4 +300,11 @@ func ExtractYear(date *time.Time) string {
 		return ""
 	}
 	return date.Format("2006")
+}
+
+func ExtractYearString(value string) string {
+	if len(value) >= 4 {
+		return value[:4]
+	}
+	return value
 }
