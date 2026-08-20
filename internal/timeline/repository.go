@@ -27,7 +27,6 @@ func (r *Repository) FindByShowAndEpisode(showID, episodeID uuid.UUID) (*Timelin
 	return &event, nil
 }
 
-
 func (r *Repository) FindByShowTypeAndDate(showID uuid.UUID, eventType string, eventDate time.Time) (*TimelineEvent, error) {
 	var event TimelineEvent
 	if err := r.db.Where("show_id = ? AND event_type = ? AND event_date = ?", showID, eventType, eventDate).
@@ -44,7 +43,7 @@ func (r *Repository) GetUserTimeline(userID uuid.UUID, from, to time.Time, event
 		Select("timeline_events.*").
 		Joins("INNER JOIN user_tracked_shows uts ON uts.show_id = timeline_events.show_id").
 		Where("uts.user_id = ?", userID).
-		Where("timeline_events.event_date BETWEEN ? AND ?", from, to).
+		Where("timeline_events.event_date >= ? AND timeline_events.event_date < ?", from, to).
 		Preload("Show")
 
 	if eventType != "" {
@@ -60,18 +59,36 @@ func (r *Repository) GetUserTimeline(userID uuid.UUID, from, to time.Time, event
 }
 
 func (r *Repository) GetTodayEvents(userID uuid.UUID, tz string) ([]TimelineEvent, error) {
-	// Simple implementation assuming UTC for now, proper TZ handling requires loc
-	now := time.Now().UTC()
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	endOfDay := startOfDay.Add(24 * time.Hour)
+	location, err := time.LoadLocation(tz)
+	if err != nil {
+		location = time.UTC
+	}
+	now := time.Now().In(location)
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, location)
+	endOfDay := startOfDay.AddDate(0, 0, 1)
 	return r.GetUserTimeline(userID, startOfDay, endOfDay, "")
 }
 
 func (r *Repository) GetWeekEvents(userID uuid.UUID, tz string) ([]TimelineEvent, error) {
-	now := time.Now().UTC()
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	endOfWeek := startOfDay.Add(7 * 24 * time.Hour)
+	location, err := time.LoadLocation(tz)
+	if err != nil {
+		location = time.UTC
+	}
+	now := time.Now().In(location)
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, location)
+	endOfWeek := startOfDay.AddDate(0, 0, 7)
 	return r.GetUserTimeline(userID, startOfDay, endOfWeek, "")
+}
+
+func (r *Repository) GetUserTimezone(userID uuid.UUID) string {
+	var timezone string
+	if err := r.db.Table("users").Select("timezone").Where("id = ?", userID).Scan(&timezone).Error; err != nil || timezone == "" {
+		return "UTC"
+	}
+	if _, err := time.LoadLocation(timezone); err != nil {
+		return "UTC"
+	}
+	return timezone
 }
 
 func (r *Repository) GetUpcomingEvents(userID uuid.UUID, days int) ([]TimelineEvent, error) {
